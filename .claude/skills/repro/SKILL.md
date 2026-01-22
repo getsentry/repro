@@ -80,7 +80,7 @@ Create a minimal, self-contained reproduction that:
 
 The README.md in the reproduction directory should include:
 
-```markdown
+````markdown
 # Reproduction for [repo]#[issue-number]
 
 **Issue:** [Link to original issue]
@@ -110,7 +110,7 @@ The README.md in the reproduction directory should include:
 - Node.js: [version if relevant]
 - [Package name]: [version]
 - OS: [if relevant]
-```
+````
 
 ### Step 7: Test the Reproduction
 

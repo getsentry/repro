@@ -32,24 +32,28 @@ When Puma receives a request, it may sit in a queue before a worker thread is av
    bundle install --path vendor/bundle
    ```
 
-2. Set up Sentry DSN (optional - leave empty to just see console output):
+2. Start Spotlight (Sentry's local development UI):
    ```bash
-   export SENTRY_DSN=""
+   npx @spotlightjs/spotlight
    ```
 
-3. Start the Puma server:
+   This will start Spotlight at http://localhost:8969. Keep this running in a terminal.
+
+3. In a second terminal, start the Puma server:
    ```bash
    bundle exec puma -C puma_config.rb
    ```
 
-4. In another terminal, run the simulation script:
+4. In a third terminal, run the simulation script:
    ```bash
    ruby simulate_queue.rb
    ```
 
+5. Open http://localhost:8969 in your browser to view the Spotlight UI and inspect the captured transaction
+
 ## Expected Behavior
 
-The Sentry transaction should include queue time as an attribute or span, similar to how Scout APM and Judoscale capture it:
+The Sentry transaction visible in Spotlight should include queue time as an attribute or span, similar to how Scout APM and Judoscale capture it:
 
 ```ruby
 # Expected transaction attributes:
@@ -69,10 +73,11 @@ This would allow developers to:
 
 Sentry transactions only capture the time spent processing the request after Puma begins execution. The queue time is NOT captured, even though it's available in the `X-Request-Start` header.
 
-Check the console output when running `simulate_queue.rb`:
-- "Calculated queue time: ~500ms" shows the queue time IS available
-- Sentry transaction data shows NO queue time attribute
-- The transaction duration only includes processing time, not queue time
+**To verify:**
+1. Check the Puma console output: "Calculated queue time: ~500ms" shows the queue time IS available
+2. Open Spotlight UI (http://localhost:8969) and inspect the transaction
+3. Notice the transaction does NOT include any queue time attribute
+4. The transaction duration only includes processing time (~100ms for the sleep), not queue time (~500ms)
 
 ## Implementation References
 
@@ -93,7 +98,14 @@ Other Ruby APM tools successfully capture this metric:
 - Ruby: 3.x+ (any recent version)
 - Puma: ~> 6.0
 - Sentry-Ruby: ~> 5.22
+- Node.js: Any recent version (for Spotlight via npx)
 - OS: Any
+
+## Why Spotlight?
+
+This reproduction uses [Spotlight](https://spotlightjs.com/) instead of sending data to Sentry's cloud. Spotlight is Sentry's local development tool that provides a UI to inspect events and transactions without requiring a Sentry account or DSN. It's perfect for reproductions and debugging.
+
+The Ruby SDK has native Spotlight support via `config.spotlight = true`, which is what this reproduction uses. Alternatively, you could use `spotlight run` to wrap the entire application, but the native integration is cleaner and doesn't require environment variable workarounds.
 
 ## Proposed Solution
 

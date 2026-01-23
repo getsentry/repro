@@ -1,26 +1,20 @@
 require 'sentry-ruby'
 require 'rack'
 
-# Configure Sentry
+# Configure Sentry with Spotlight for local development
 Sentry.init do |config|
-  config.dsn = ENV['SENTRY_DSN']
+  # Use Spotlight instead of sending to Sentry - no DSN required!
+  config.spotlight = true
   config.traces_sample_rate = 1.0
   config.enable_tracing = true
 
-  # Log transactions to console for inspection
+  # Optional: Still log to console for quick verification
   config.before_send_transaction = lambda do |event, hint|
-    puts "\n=== Sentry Transaction ===="
+    puts "\n=== Transaction captured by Sentry ==="
     puts "Transaction: #{event.transaction}"
-    puts "Start timestamp: #{event.start_timestamp}"
-    puts "Timestamp: #{event.timestamp}"
     puts "Duration: #{event.timestamp - event.start_timestamp} seconds"
-    puts "\nContext data:"
-    puts event.contexts.inspect
-    puts "\nExtra data:"
-    puts event.extra.inspect
-    puts "\nTags:"
-    puts event.tags.inspect
-    puts "========================\n"
+    puts "Check Spotlight UI for full transaction details"
+    puts "====================================\n"
     event
   end
 end

@@ -28,8 +28,7 @@ puts "This represents ~#{queue_time_ms}ms of queue time\n\n"
 
 response = http.request(request)
 puts "Response status: #{response.code}"
-puts "\nCheck the Puma console output to see:"
-puts "1. Calculated queue time from headers"
-puts "2. Sentry transaction data (note: queue time is NOT currently captured)\n\n"
-puts "Expected: Sentry should capture queue_time as a transaction attribute"
-puts "Actual: Queue time is not captured in the transaction"
+puts "\n✓ Check the Puma console output to see the calculated queue time"
+puts "✓ Check Spotlight UI (http://localhost:8969) to inspect the Sentry transaction\n\n"
+puts "Expected: Transaction should include queue_time attribute in Spotlight"
+puts "Actual: Queue time is NOT captured - only processing time is shown"

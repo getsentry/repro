@@ -32,12 +32,12 @@ When Puma receives a request, it may sit in a queue before a worker thread is av
    bundle install --path vendor/bundle
    ```
 
-2. Start Spotlight (Sentry's local development UI):
+2. Start Spotlight in tail mode to watch transactions:
    ```bash
-   npx @spotlightjs/spotlight
+   npx @spotlightjs/spotlight tail traces --format json
    ```
 
-   This will start Spotlight at http://localhost:8969. Keep this running in a terminal.
+   This will stream transaction data to your terminal in real-time. Keep this running.
 
 3. In a second terminal, start the Puma server:
    ```bash
@@ -49,7 +49,9 @@ When Puma receives a request, it may sit in a queue before a worker thread is av
    ruby simulate_queue.rb
    ```
 
-5. Open http://localhost:8969 in your browser to view the Spotlight UI and inspect the captured transaction
+5. Check the output in all three terminals
+
+**Alternative**: You can also use the Spotlight UI by running `npx @spotlightjs/spotlight` and opening http://localhost:8969 in your browser
 
 ## Expected Behavior
 
@@ -74,10 +76,39 @@ This would allow developers to:
 Sentry transactions only capture the time spent processing the request after Puma begins execution. The queue time is NOT captured, even though it's available in the `X-Request-Start` header.
 
 **To verify:**
-1. Check the Puma console output: "Calculated queue time: ~500ms" shows the queue time IS available
-2. Open Spotlight UI (http://localhost:8969) and inspect the transaction
-3. Notice the transaction does NOT include any queue time attribute
-4. The transaction duration only includes processing time (~100ms for the sleep), not queue time (~500ms)
+1. **Puma console** shows: "Calculated queue time: ~500ms" - proving the data IS available
+2. **Spotlight tail output** shows the transaction JSON with no `queue_time` attribute
+3. **Transaction duration** is only ~100ms (just the processing time), NOT ~600ms (queue + processing)
+
+Example of what you'll see in `spotlight tail traces --format json`:
+```json
+{
+  "type": "transaction",
+  "transaction": "GET /",
+  "start_timestamp": 1234567890.123,
+  "timestamp": 1234567890.223,
+  // Duration is ~0.1 seconds (processing only)
+  // NO queue_time attribute anywhere!
+}
+```
+
+The transaction should include an additional attribute like `"queue_time_ms": 500` or a separate span for queue time, but it doesn't.
+
+### Quick Validation Script
+
+For a streamlined check, use the included validation script:
+```bash
+# Terminal 1: Start validation (runs spotlight tail with filtering)
+./validate.sh
+
+# Terminal 2: Start Puma
+bundle exec puma -C puma_config.rb
+
+# Terminal 3: Send request
+ruby simulate_queue.rb
+```
+
+The script automatically parses transaction JSON and reports whether `queue_time` attributes are present.
 
 ## Implementation References
 

@@ -2,4 +2,4 @@ source 'https://rubygems.org'
 
 gem 'puma', '~> 6.0'
 gem 'rack', '~> 3.0'
-gem 'sentry-ruby', '~> 5.22'
+gem 'sentry-ruby', github: 'getsentry/sentry-ruby', branch: 'puma-queue-time'

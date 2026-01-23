@@ -10,7 +10,7 @@ This repository will serve as a collection of reproductions of bugs and issues f
 
 The structure of this repository is `<sdk-repository>/<issue-number>/`. Each such directory contains a self-contained reproductions with instructions for the problem involved.
 
-The best way to use this repository is with the Claude Skill `/repro`.
+The best way to use this repository is with the Claude Skill `/repro <github-issue-url>`.
 
 ### Example
 

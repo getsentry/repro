@@ -85,16 +85,10 @@ fn main() {
     // Thread 1: Enter the span and create a child span "bar"
     let handle1 = thread::spawn(move || {
         let _guard = span.enter();
-        eprintln!("--- Thread 1: Entered span 'foo' ---");
-
         // Create child span "bar" - this should appear as a child of "foo"
         let _bar_span = tracing::info_span!("bar").entered();
-        eprintln!("--- Thread 1: Entered span 'bar' ---");
-
         // Sleep to allow overlap with thread 2
         thread::sleep(Duration::from_millis(100));
-
-        eprintln!("--- Thread 1: Exiting spans ---");
     });
 
     // Thread 2: Enter the same span and create a child span "baz"
@@ -103,16 +97,12 @@ fn main() {
         thread::sleep(Duration::from_millis(10));
 
         let _guard = span2.enter();
-        eprintln!("--- Thread 2: Entered span 'foo' ---");
 
         // Create child span "baz" - this should appear as a child of "foo"
         let _baz_span = tracing::info_span!("baz").entered();
-        eprintln!("--- Thread 2: Entered span 'baz' ---");
 
         // Sleep before exiting
         thread::sleep(Duration::from_millis(50));
-
-        eprintln!("--- Thread 2: Exiting spans ---");
     });
 
     // Wait for both threads to complete

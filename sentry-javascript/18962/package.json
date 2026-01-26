@@ -1,0 +1,19 @@
+{
+  "name": "sentry-openai-streaming-repro",
+  "version": "1.0.0",
+  "description": "Reproduction for sentry-javascript#18962 - Sentry breaking OpenAI streaming",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "start:with-sentry": "ENABLE_SENTRY=true node --import ./instrument.mjs index.js",
+    "start:without-sentry": "node index.js"
+  },
+  "dependencies": {
+    "@sentry/node": "^8.0.0",
+    "openai": "^4.77.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  }
+}

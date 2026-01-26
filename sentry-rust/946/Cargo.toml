@@ -1,0 +1,10 @@
+[package]
+name = "sentry-946-repro"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sentry = "0.46.0"
+sentry-tracing = "0.46.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"

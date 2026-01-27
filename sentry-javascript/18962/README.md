@@ -1,25 +1,19 @@
 # Reproduction for sentry-javascript#18962
 
-**Issue:** [Sentry breaking OpenAI STREAMING](https://github.com/getsentry/sentry-javascript/issues/18962)
+**Issue:** https://github.com/getsentry/sentry-javascript/issues/18962
 
 ## Description
 
-This reproduction demonstrates that Sentry's instrumentation breaks OpenAI streaming capabilities. When Sentry is initialized (via `--import ./instrument.mjs`), OpenAI streaming returns only the last full response instead of incremental chunks, breaking the real-time streaming behavior.
+This reproduction attempts to demonstrate the reported issue where OpenAI streaming breaks when Sentry is initialized in a NestJS application with `@sentry/nestjs`.
 
-The issue occurs even when:
-- The OpenAI integration is explicitly filtered out
-- `process.env.OTEL_NODE_DISABLED_INSTRUMENTATIONS = 'openai'` is set
-- Various other workarounds are attempted
+**Note:** In our testing, streaming works correctly both with and without Sentry enabled. We need more details from the issue reporter to reproduce the exact issue.
 
-The only reliable workaround is setting `defaultIntegrations: false`, but this requires manually re-enabling all needed integrations.
+## Setup
 
-## Prerequisites
-
-You need an OpenAI API key to run this reproduction:
-
-```bash
-export OPENAI_API_KEY=sk-your-key-here
-```
+This is a NestJS application that uses:
+- `@sentry/nestjs` v10.x (with OpenAI integration)
+- `openai` SDK for direct API calls
+- `@langchain/openai` for LangChain integration
 
 ## Steps to Reproduce
 
@@ -28,56 +22,89 @@ export OPENAI_API_KEY=sk-your-key-here
    npm install
    ```
 
-2. First, test **WITHOUT** Sentry (baseline - this should work correctly):
+2. Build the TypeScript:
+   ```bash
+   npm run build
+   ```
+
+3. Set your OpenAI API key:
+   ```bash
+   export OPENAI_API_KEY=sk-your-key-here
+   ```
+
+4. Optionally set Sentry DSN:
+   ```bash
+   export SENTRY_DSN=https://your-dsn@sentry.io/project
+   ```
+
+5. Test WITHOUT Sentry:
    ```bash
    npm run start:without-sentry
+   # In another terminal:
+   curl http://localhost:3000/stream
    ```
 
-   **Expected behavior:** You should see incremental streaming with multiple chunks being received in real-time as the model generates the response.
-
-3. Now test **WITH** Sentry enabled:
+6. Test WITH Sentry:
    ```bash
    npm run start:with-sentry
+   # In another terminal:
+   curl http://localhost:3000/stream
    ```
 
-## Expected Behavior
+## Available Endpoints
 
-OpenAI streaming should work the same way with or without Sentry:
-- Multiple chunks should be received incrementally
-- Content should stream in real-time as it's generated
-- The chunk count should be relatively high (10+ chunks for a typical response)
+- `GET /` - Status and available endpoints
+- `GET /stream` - Test OpenAI streaming with `for await`
+- `GET /stream-langchain` - Test OpenAI streaming via LangChain
+- `GET /stream-web` - Test OpenAI streaming with `toReadableStream()`
+- `GET /stream-sse` - Test OpenAI streaming with Server-Sent Events
 
-## Actual Behavior (Bug)
+## Expected Behavior (per issue)
 
-When Sentry is enabled via `--import ./instrument.mjs`:
-- Streaming appears broken
-- Only 1-2 chunks are received (typically just the final complete response)
-- No real-time incremental updates
-- The response arrives all at once instead of streaming
+According to the issue, with Sentry enabled:
+- Streaming should break
+- Only the final complete response should come through (1-2 chunks)
+- Real-time streaming behavior should not work
+
+## Actual Behavior (our testing)
+
+In our testing with `@sentry/nestjs@10.36.0`:
+- Streaming works correctly with Sentry enabled
+- 40+ chunks received for all streaming methods
+- No difference between Sentry enabled/disabled
 
 ## Environment
 
-- Node.js: v20+ (ESM modules)
-- @sentry/node: ^8.0.0
-- openai: ^4.77.0
+- Node.js: 22.x
+- @sentry/nestjs: 10.36.0
+- @nestjs/core: 10.x
+- openai: 4.x
+- @langchain/openai: 1.x
 
-## Notes
+## Questions for Issue Reporter
 
-- The reproduction uses a simplified Node.js setup instead of full NestJS to isolate the issue
-- The core problem is the same: Sentry's auto-instrumentation interferes with stream handling
-- Even filtering out the OpenAI integration doesn't resolve the issue
-- This suggests the problem may be in Sentry's underlying HTTP/fetch instrumentation affecting stream processing
+To help reproduce the issue, please provide:
 
-## Known Workaround
+1. **Exact SDK version**: What specific version of `@sentry/nestjs` are you using?
+2. **Node.js version**: What Node.js version?
+3. **Sentry.init config**: Full Sentry initialization config
+4. **NestJS setup**: Any interceptors, middleware, or guards that might affect responses?
+5. **OpenAI usage**: Exact code showing how you're using OpenAI/LangChain
+6. **Network config**: Any proxies or custom HTTP agents?
 
-Setting `defaultIntegrations: false` in Sentry initialization prevents the issue, but requires manually enabling all needed integrations:
+## Workaround (from issue)
 
-```javascript
+The issue reporter found that `defaultIntegrations: false` helps, suggesting one of the default integrations causes the problem. Try narrowing down which integration:
+
+```typescript
 Sentry.init({
   dsn: '...',
-  defaultIntegrations: false,
-  integrations: [
-    // Manually add only the integrations you need
-  ],
+  // Try disabling specific integrations to find the culprit
+  integrations: (integrations) => {
+    return integrations.filter((integration) => {
+      // Try filtering different integrations
+      return integration.name !== 'OpenAI';
+    });
+  },
 });
 ```

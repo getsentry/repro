@@ -69,14 +69,25 @@ Create a minimal, self-contained reproduction that:
 
 **Guidelines for reproductions:**
 - Keep it minimal - only include what's needed to show the bug
-- Install the relevant Sentry SDK for the detected language
+- Install the Sentry SDK and version mentioned in the issue description. 
+  - Fall back to the latest version if no specific version is provided. 
+  - Fall back to the best fitting Sentry SDK you can detect for the reproduction. 
 - Keep the DSN for Sentry empty and remind users to `export SENTRY_DSN=` in the instructions
 - Use standard tooling where possible (npm, uv, bundle)
-- If the bug involves a specific framework (django, rails, express, opentelemetry), set up that framework minimally
+- If the issue description mentions a specific framework (django, rails, express, opentelemetry), set up that framework minimally
 - Include any necessary configuration files
 - Add comments in the code explaining what should happen vs what actually happens
 
-### Step 6: Write the README.md
+### Step 6: Test the Reproduction
+
+Before committing, verify the reproduction actually works:
+1. Run the install commands
+2. Run the reproduction
+3. Confirm the bug manifests as described
+4. If you get stuck, continue with Step 7 but mention it clearly in the readme and still create the PR
+
+
+### Step 7: Write the README.md
 
 The README.md in the reproduction directory should include:
 
@@ -112,14 +123,6 @@ The README.md in the reproduction directory should include:
 - OS: [if relevant]
 ````
 
-### Step 7: Test the Reproduction
-
-Before committing, verify the reproduction actually works:
-1. Run the install commands
-2. Run the reproduction
-3. Confirm the bug manifests as described
-4. If you get stuck, move on the Step 8 and still create the PR
-
 ### Step 8: Commit and Create PR
 
 1. Create a new branch:
@@ -145,6 +148,9 @@ Before committing, verify the reproduction actually works:
    - Instructions to run it
 
 ### Step 9: Backlink to Original Issue
+
+IMPORTANT: Only do this, if you successfully reproduced the bug described in the issue!
+Before posting the github response on the issue, ask for permission (`AskUserQuestion` tool).
 
 Comment on the original GitHub issue with a link to the PR:
 

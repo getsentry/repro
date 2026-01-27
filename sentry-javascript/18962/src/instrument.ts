@@ -11,10 +11,6 @@ if (process.env.ENABLE_SENTRY === "true") {
     tracesSampleRate: 1.0,
     debug: true,
     sendDefaultPii: true,
-    integrations: [
-      Sentry.openAIIntegration({ recordInputs: true, recordOutputs: true }),
-      Sentry.langChainIntegration({ recordInputs: true, recordOutputs: true }),
-    ],
   });
 
   console.log("✅ Sentry initialized");

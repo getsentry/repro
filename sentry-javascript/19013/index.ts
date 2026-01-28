@@ -1,20 +1,8 @@
-import * as SentryBun from "@sentry/bun";
 import express from "express";
+import * as SentryBun from "@sentry/bun";
 
-// Initialize Sentry - set SENTRY_DSN environment variable before running
-SentryBun.init({
-  dsn: process.env.SENTRY_DSN || "",
-
-  tracesSampleRate: 1.0,
-
-  debug: true, // Enable debug to see what's happening
-
-  integrations: [
-    SentryBun.captureConsoleIntegration({
-      levels: ["error"],
-    }),
-  ],
-});
+import { subscribe } from "node:diagnostics_channel";
+import http from "node:http";
 
 const app = express();
 
@@ -37,12 +25,19 @@ app.use((req, res, next) => {
 
 // Simple endpoint 1
 app.get("/endpoint1", (req, res) => {
-  const traceId = SentryBun.getActiveSpan()?.spanContext().traceId;
-  res.json({
-    endpoint: "endpoint1",
-    traceId: traceId || "NO TRACE ID",
-    message: "This is endpoint 1",
-  });
+  SentryBun.startSpan(
+    {
+      name: "endpoint1",
+    },
+    () => {
+      const traceId = SentryBun.getActiveSpan()?.spanContext().traceId;
+      res.json({
+        endpoint: "endpoint1",
+        traceId: traceId || "NO TRACE ID",
+        message: "This is endpoint 1",
+      });
+    }
+  );
 });
 
 // Simple endpoint 2
@@ -55,12 +50,17 @@ app.get("/endpoint2", (req, res) => {
   });
 });
 
-// Health check endpoint
-app.get("/health", (req, res) => {
-  res.json({ status: "ok" });
+subscribe("http.server.request.start", (message, name) => {
+  console.warn("http.server.request: ", message, name);
 });
 
-const PORT = process.env.PORT || 3000;
+subscribe("http.client.request.start", (message, name) => {
+  console.warn("http.client.request: ", message, name);
+});
+
+const PORT = process.env.PORT || 3001;
+
+app.use(SentryBun.expressErrorHandler());
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);

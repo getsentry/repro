@@ -4,14 +4,14 @@
   "description": "Reproduction for sentry-javascript#19013 - Bun+Express scope isolation issue",
   "main": "index.ts",
   "scripts": {
-    "start": "bun run index.ts",
+    "start": "bun --preload ./instrument.js index.ts",
     "test": "bun run test-requests.ts"
   },
   "dependencies": {
     "@sentry/bun": "10.37.0",
-    "express": "^4.21.0"
+    "express": "^5.2.1"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0"
+    "@types/express": "^5.0.6"
   }
 }

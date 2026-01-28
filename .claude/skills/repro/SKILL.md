@@ -242,8 +242,6 @@ You can run it by cloning the repo and following the instructions in the README.
 [If telemetry was verified, add:]
 ✅ Verified with actual Sentry telemetry - the reproduction successfully captures the reported issue."
 
-You can run it by cloning the repo and following the instructions in the README.
-
 🤖 Generated with [Claude Code](https://claude.ai/code)"
 ```
 

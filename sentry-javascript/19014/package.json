@@ -1,0 +1,12 @@
+{
+  "name": "sentry-javascript-19014-repro",
+  "version": "1.0.0",
+  "description": "Reproduction for sentry-javascript#19014 - Invalid exception group detection for AggregateError when using custom name",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@sentry/node": "10.27.0"
+  }
+}

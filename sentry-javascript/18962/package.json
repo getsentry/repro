@@ -1,0 +1,26 @@
+{
+  "name": "sentry-nestjs-openai-streaming-repro",
+  "version": "1.0.0",
+  "description": "Reproduction for sentry-javascript#18962 - Sentry breaking OpenAI streaming in NestJS",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "nest build",
+    "start": "nest start",
+    "start:dev": "nest start --watch"
+  },
+  "dependencies": {
+    "@langchain/openai": "^1.2.3",
+    "@nestjs/common": "^10.0.0",
+    "@nestjs/core": "^10.0.0",
+    "@nestjs/platform-express": "^10.0.0",
+    "@sentry/nestjs": "^10.0.0",
+    "langchain": "^1.2.14",
+    "reflect-metadata": "^0.2.0",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.0.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.0.0"
+  }
+}

@@ -1,0 +1,13 @@
+[project]
+name = "django-asgi-send-default-pii-repro"
+version = "0.1.0"
+description = "Reproduction for sentry-python#5274"
+requires-python = ">=3.11"
+dependencies = [
+    "django>=5.1",
+    "sentry-sdk>=2.48.0",
+    "uvicorn",
+]
+
+[tool.uv]
+dev-dependencies = []

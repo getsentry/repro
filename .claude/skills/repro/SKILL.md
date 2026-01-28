@@ -103,11 +103,22 @@ For issues involving runtime behavior, errors, exceptions, or telemetry data (no
    - Configuration/setup issues
    - Documentation issues
 
-2. **Check for SENTRY_DSN**: Verify the `SENTRY_DSN` environment variable is set:
-   ```bash
-   echo $SENTRY_DSN
-   ```
-   If not set, document in the README that telemetry verification was skipped and the user should set their DSN to test.
+2. **Check prerequisites for telemetry verification**:
+   - Verify the `SENTRY_DSN` environment variable is set:
+     ```bash
+     echo $SENTRY_DSN
+     ```
+   - Verify Sentry MCP tools are available by attempting to use them
+   - Check if Sentry MCP requires authentication
+
+   **If any prerequisites are missing**:
+   - Report the issue to the user using `AskUserQuestion`
+   - Ask if they want to verify with telemetry
+   - If yes, inform them what needs to be set up:
+     - Missing SENTRY_DSN: "Set your Sentry DSN with `export SENTRY_DSN=<your-dsn>`"
+     - Sentry MCP not installed: "Install the Sentry MCP server (provide setup instructions)"
+     - Sentry MCP needs auth: "Authenticate the Sentry MCP server with your credentials"
+   - If no, skip telemetry verification and document in the README that it was skipped
 
 3. **Run with telemetry**: Execute the reproduction, which will send events to Sentry.
 

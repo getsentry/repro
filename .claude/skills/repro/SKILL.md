@@ -157,7 +157,9 @@ Comment on the original GitHub issue with a link to the PR:
 ```bash
 gh issue comment <issue-number> --repo <owner>/<repo> --body "I've created a reproduction for this issue: [PR-URL]
 
-You can run it by cloning the repo and following the instructions in the README."
+You can run it by cloning the repo and following the instructions in the README.
+
+🤖 Generated with [Claude Code](https://claude.ai/code)"
 ```
 
 ## Error Handling

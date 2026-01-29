@@ -1,2 +1,90 @@
+# Rust
 /target
+*.rs.bk
+
+# Node.js
+node_modules/
+dist/
+out/
+build/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
 .DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE/Editor
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Claude Code
+.claude/settings.local.json
+
+# Coverage & Testing
+coverage/
+.nyc_output/
+*.lcov
+
+# React Native
+# Generated native project folders (exclude completely)
+**/ios/
+**/android/
+
+# Additional React Native build artifacts
+**/ios/Pods/
+**/ios/build/
+**/ios/.xcode.env.local
+**/android/app/build/
+**/android/build/
+**/android/.gradle/
+**/android/local.properties
+**/android/.cxx/
+
+# Metro bundler
+.metro-health-check*
+**/.expo/
+**/.expo-shared/
+
+# React Native generated files
+**/ios/Podfile.lock
+**/node_modules/
+**/.watchmanconfig
+
+# Lock files (optional - uncomment if you want to track them)
+**/package-lock.json
+**/yarn.lock
+
+# React Native debug files
+**/.bundle/
+**/vendor/bundle/
+
+# Fastlane
+**/fastlane/report.xml
+**/fastlane/Preview.html
+**/fastlane/screenshots
+**/fastlane/test_output
+
+# Ruby
+**/.ruby-version
+**/.ruby-gemset
+
+# Temporary files
+**/tmp/
+**/*.tmp

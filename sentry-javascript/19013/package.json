@@ -1,0 +1,17 @@
+{
+  "name": "sentry-bun-express-repro-19013",
+  "version": "1.0.0",
+  "description": "Reproduction for sentry-javascript#19013 - Bun+Express scope isolation issue",
+  "main": "index.ts",
+  "scripts": {
+    "start": "bun --preload ./instrument.js index.ts",
+    "test": "bun run test-requests.ts"
+  },
+  "dependencies": {
+    "@sentry/bun": "10.37.0",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6"
+  }
+}

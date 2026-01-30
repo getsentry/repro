@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity">
+
+    <!-- CameraX PreviewView - this is the view that should be masked in replay -->
+    <androidx.camera.view.PreviewView
+        android:id="@+id/previewView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toTopOf="@+id/buttonContainer"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <LinearLayout
+        android:id="@+id/buttonContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Camera preview is showing above.\nTrigger an error to test if it's masked in replay."
+            android:textAlignment="center"
+            android:layout_marginBottom="16dp" />
+
+        <Button
+            android:id="@+id/crashButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Capture Error (Non-Fatal)"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/fatalCrashButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Trigger Fatal Crash"
+            android:backgroundTint="#B00020" />
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

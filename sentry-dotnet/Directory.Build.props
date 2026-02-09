@@ -1,0 +1,3 @@
+<Project>
+  <!-- stop multi-level merging: https://learn.microsoft.com/visualstudio/msbuild/customize-by-directory -->
+</Project>

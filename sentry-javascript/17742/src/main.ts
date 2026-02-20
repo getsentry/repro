@@ -10,15 +10,14 @@ async function bootstrap() {
   console.log("");
   console.log("To reproduce the breadcrumb leaking issue:");
   console.log(
-    "1. Wait ~10 seconds for a few background jobs to run and pollute the default scope"
+    "1. Wait ~10 seconds for background jobs to pollute the default scope"
   );
   console.log("2. curl http://localhost:3000/trigger-error");
   console.log("");
-  console.log(
-    "Expected: The error event should only contain breadcrumbs from the HTTP request"
-  );
-  console.log(
-    "Actual: The error event also contains breadcrumbs from background jobs"
-  );
+  console.log("Background job sources:");
+  console.log("  - @nestjs/schedule @Interval (always active)");
+  console.log("  - @nestjs/event-emitter @OnEvent (always active)");
+  console.log("  - @nestjs/bullmq @Processor (requires REDIS_URL)");
+  console.log("  - nestjs-graphile-worker @Task (requires DATABASE_URL)");
 }
 bootstrap();

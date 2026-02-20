@@ -9,12 +9,17 @@
     "test:repro": "npm run build && bash test-repro.sh"
   },
   "dependencies": {
+    "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^10.0.0",
     "@nestjs/core": "^10.0.0",
+    "@nestjs/event-emitter": "^3.0.1",
     "@nestjs/platform-express": "^10.0.0",
     "@nestjs/schedule": "^6.1.1",
     "@sentry/nestjs": "^10.2.0",
+    "bullmq": "^5.69.3",
     "dotenv": "^17.3.1",
+    "graphile-worker": "^0.16.6",
+    "nestjs-graphile-worker": "^0.9.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },

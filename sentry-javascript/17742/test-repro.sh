@@ -11,7 +11,7 @@ node dist/main.js &
 APP_PID=$!
 
 echo "Waiting for server to start and background jobs to run..."
-sleep 12
+sleep 18
 
 echo ""
 echo "=== Triggering error to check for leaked breadcrumbs ==="

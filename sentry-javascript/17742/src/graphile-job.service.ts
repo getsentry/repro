@@ -40,7 +40,12 @@ export class GraphileJobProducer implements OnModuleInit {
 
   constructor(private readonly workerService: WorkerService) {}
 
-  onModuleInit() {
+  async onModuleInit() {
+    // Start the graphile-worker runner so it actually processes tasks
+    this.workerService.run().catch((err) => {
+      console.error("[nestjs-graphile-worker] Runner error:", err);
+    });
+
     setInterval(async () => {
       this.taskCount++;
       try {

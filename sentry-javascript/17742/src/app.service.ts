@@ -50,16 +50,11 @@ export class AppService {
       level: "error",
     });
 
-    // Capture an error — check the Sentry event to see if breadcrumbs from
-    // route-a and route-b leaked into this event.
+    // Throw an exception — the SentryGlobalFilter will capture it automatically.
+    // Check the Sentry event to see if breadcrumbs from route-a and route-b
+    // leaked into this event.
     // EXPECTED: Only the "trigger-error" breadcrumb should appear
     // ACTUAL (BUG): Breadcrumbs from route-a and route-b may also appear
-    const error = new Error("Test error to check breadcrumb isolation");
-    Sentry.captureException(error);
-
-    console.log(
-      "[Trigger Error] Error captured — check Sentry for leaked breadcrumbs"
-    );
-    return "Error triggered — check Sentry dashboard for breadcrumb leaking";
+    throw new Error("Test error to check breadcrumb isolation");
   }
 }

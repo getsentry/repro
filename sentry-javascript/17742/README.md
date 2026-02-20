@@ -4,63 +4,59 @@
 
 ## Description
 
-Breadcrumbs from earlier, unrelated requests leak into later Sentry error events in NestJS. This indicates that request isolation isn't working as expected — breadcrumbs are being stored on the default (global) isolation scope instead of per-request scopes.
+Breadcrumbs from background jobs (cron tasks, graphile-worker, BullMQ, etc.) leak into HTTP request error events in NestJS. Background jobs run outside the HTTP request context, so they add breadcrumbs to the default isolation scope. When a new HTTP request arrives, `httpServerIntegration` clones the default scope — inheriting all those stale breadcrumbs.
 
 ## Steps to Reproduce
 
-1. Export your Sentry DSN (or run without one to see local debug output):
+1. Add a `.env` file with your Sentry DSN:
    ```bash
-   export SENTRY_DSN=<your-dsn>
+   echo "SENTRY_DSN=<your-dsn>" > .env
    ```
 
-2. Install dependencies:
+2. Install dependencies and run the reproduction:
    ```bash
    npm install
+   npm run test:repro
    ```
 
-3. Build and start the server:
-   ```bash
-   npm run build && npm start
-   ```
+   This builds the app, starts it, waits for background jobs to pollute the default scope, then triggers an error via HTTP.
 
-4. In another terminal, hit the routes in sequence:
-   ```bash
-   curl http://localhost:3000/route-a
-   sleep 1
-   curl http://localhost:3000/route-b
-   sleep 1
-   curl http://localhost:3000/trigger-error
-   ```
-
-5. Check the server output — the `beforeSend` hook logs all breadcrumbs attached to the error event.
+3. Check the output — the `beforeSend` hook logs all breadcrumbs on the error event.
 
 ## Expected Behavior
 
-The error event from `/trigger-error` should only contain its own breadcrumb:
+The error event from `GET /trigger-error` should only contain its own breadcrumb:
 ```
 === Sentry Event Breadcrumbs (1 total) ===
-  [0] category=trigger-error, message=About to trigger an error
+  [0] category=http-request, message=About to trigger an error in HTTP handler
 ```
 
 ## Actual Behavior
 
-The error event contains breadcrumbs from all previous requests:
+The error event contains breadcrumbs from background jobs that ran before the request:
 ```
-=== Sentry Event Breadcrumbs (6 total) ===
-  [0] category=route-a, message=Processing route A - step 1
-  [1] category=route-a, message=Processing route A - step 2
-  [2] category=route-a, message=Route A completed successfully
-  [3] category=route-b, message=Processing route B - step 1
-  [4] category=route-b, message=Route B completed successfully
-  [5] category=trigger-error, message=About to trigger an error
+=== Sentry Event Breadcrumbs (21 total) ===
+  ...
+  [9]  category=background-job, message=Background job #1 started
+  [10] category=background-job, message=Background job #1 completed
+  ...
+  [20] category=http-request, message=About to trigger an error in HTTP handler
 
-*** BUG CONFIRMED: Breadcrumbs leaked from other requests! ***
+*** BUG CONFIRMED: 6 breadcrumbs leaked from background jobs! ***
 ```
 
-The Sentry debug logs also show: `"Isolation scope is still the default isolation scope, skipping setting transactionName."` — confirming that requests are not getting their own isolation scopes.
+## Root Cause
+
+In `packages/node-core/src/integrations/http/httpServerIntegration.ts:185`:
+```ts
+const isolationScope = getIsolationScope().clone();
+```
+
+This clones the **default** isolation scope, which has been polluted by background job breadcrumbs. The cloned scope inherits all those breadcrumbs, causing them to appear on HTTP request error events.
 
 ## Environment
 
 - Node.js: v18+
 - @sentry/nestjs: ^10.2.0
 - @nestjs/core: ^10.0.0
+- @nestjs/schedule: ^6.1.1

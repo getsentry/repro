@@ -9,15 +9,16 @@ async function bootstrap() {
   console.log("Server running on http://localhost:3000");
   console.log("");
   console.log("To reproduce the breadcrumb leaking issue:");
-  console.log("1. curl http://localhost:3000/route-a");
-  console.log("2. Wait a moment, then: curl http://localhost:3000/route-b");
-  console.log("3. curl http://localhost:3000/trigger-error");
+  console.log(
+    "1. Wait ~10 seconds for a few background jobs to run and pollute the default scope"
+  );
+  console.log("2. curl http://localhost:3000/trigger-error");
   console.log("");
   console.log(
-    "Expected: The error event should only contain breadcrumbs from /trigger-error"
+    "Expected: The error event should only contain breadcrumbs from the HTTP request"
   );
   console.log(
-    "Actual: The error event may contain breadcrumbs from /route-a and /route-b as well"
+    "Actual: The error event also contains breadcrumbs from background jobs"
   );
 }
 bootstrap();

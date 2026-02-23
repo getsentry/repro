@@ -1,0 +1,7 @@
+# frozen_string_literal: true
+
+source "https://rubygems.org"
+
+gem "sidekiq", "~> 7.3"
+gem "sentry-ruby", "~> 5.22"
+gem "sentry-sidekiq", "~> 5.22"

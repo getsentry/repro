@@ -35,7 +35,7 @@ Thumbs.db
 *.sublime-workspace
 
 # Claude Code
-.claude/settings.local.json
+**/.claude/settings.local.json
 
 # Coverage & Testing
 coverage/

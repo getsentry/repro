@@ -1,0 +1,36 @@
+{
+  "name": "repro-sentry-javascript-18572",
+  "version": "1.0.0",
+  "description": "Reproduction for getsentry/sentry-javascript#18572 - OpenTelemetry context not propagating with SentryContextManager and gRPC",
+  "private": true,
+  "scripts": {
+    "build": "nest build",
+    "start": "node dist/instrument.js",
+    "start:dev": "nest start"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.12.6",
+    "@grpc/proto-loader": "^0.7.13",
+    "@nestjs/common": "^11.1.9",
+    "@nestjs/core": "^11.1.9",
+    "@nestjs/microservices": "^11.1.9",
+    "@nestjs/platform-express": "^11.1.9",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.67.2",
+    "@opentelemetry/core": "^2.2.0",
+    "@opentelemetry/exporter-trace-otlp-grpc": "^0.208.0",
+    "@opentelemetry/resources": "^2.2.0",
+    "@opentelemetry/sdk-node": "^0.208.0",
+    "@opentelemetry/sdk-trace-node": "^2.2.0",
+    "@opentelemetry/semantic-conventions": "^1.38.0",
+    "@sentry/nestjs": "^10.31.0",
+    "@sentry/opentelemetry": "^10.31.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@nestjs/schematics": "^11.0.0",
+    "typescript": "^5.7.0"
+  }
+}

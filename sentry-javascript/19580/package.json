@@ -3,14 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "NODE_OPTIONS='--import ./instrument.server.mjs' react-router dev",
-    "build": "react-router build",
-    "start": "NODE_OPTIONS='--import ./instrument.server.mjs' react-router-serve ./build/server/index.js"
+    "dev": "NODE_OPTIONS='--import ./instrument.server.mjs' NODE_ENV=production react-router dev",
+    "build": "NODE_ENV=production react-router build",
+    "start": "NODE_OPTIONS='--import ./instrument.server.mjs' NODE_ENV=production react-router-serve ./build/server/index.js"
   },
   "dependencies": {
     "@sentry/react-router": "^9.38.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
     "react-router": "^7.6.1",
     "@react-router/node": "^7.6.1"
   },

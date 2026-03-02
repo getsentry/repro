@@ -5,7 +5,7 @@ import { HydratedRouter } from "react-router/dom";
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN || "",
-  integrations: [Sentry.browserTracingIntegration()],
+  integrations: [Sentry.reactRouterTracingIntegration()],
   tracesSampleRate: 1.0,
   debug: true, // Enable debug to see transaction names in console
 });

@@ -34,18 +34,20 @@ The `payload` local variable is captured as just `{}` (empty object) with no nes
 ```
 --- Local variables captured for processRequest ---
 {
-  "payload": {},
-  "serialized": {}
+  "simpleString": "hello world",       // ✅ primitive string captured
+  "simpleNumber": 42,                   // ✅ primitive number captured
+  "flatObject": { "key": "value", "count": 10 },  // ✅ flat object captured
+  "payload": {}                         // ❌ nested object is empty!
 }
 
 --- Same object attached via Sentry.setExtra() ---
 {
-  "payload_debug": {
-    "user": { "id": 123, "profile": { "name": "Test User", ... } },
-    "items": [{ "id": 1, "nested": { "deep": { "value": "should be visible" } } }]
-  }
+  "user": { "id": 123, "profile": { "name": "Test User", ... } },
+  "items": [{ "id": 1, "nested": { "deep": { "value": "should be visible" } } }]
 }
 ```
+
+Primitives and flat objects are captured correctly. Only deeply nested objects lose their contents.
 
 ## Environment
 

@@ -31,6 +31,11 @@ Sentry.init({
 
 // Simulate a Lambda-like handler that processes a deeply nested payload
 async function processRequest() {
+  // Simple (non-nested) local variables for comparison
+  const simpleString = "hello world";
+  const simpleNumber = 42;
+  const flatObject = { key: "value", count: 10 };
+
   // This is the deeply nested object that should appear in local variables
   const payload = {
     user: {

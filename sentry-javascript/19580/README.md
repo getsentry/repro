@@ -16,7 +16,7 @@ The root cause is in the patched `navigate` function which uses `String(args[0])
 
 1. Set your Sentry DSN:
    ```bash
-   export SENTRY_DSN=<your-dsn>
+   export VITE_SENTRY_DSN=<your-dsn>
    ```
 
 2. Install dependencies:

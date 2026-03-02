@@ -1,0 +1,12 @@
+{
+  "name": "repro-sentry-javascript-19572",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Reproduction for sentry-javascript#19572 - LocalVariables truncates nested objects",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@sentry/aws-serverless": "10.36.0"
+  }
+}

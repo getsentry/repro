@@ -1,0 +1,97 @@
+name: Close resolved repros
+
+on:
+  schedule:
+    - cron: "0 9 * * *" # daily at 9am UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Log which PRs would be closed without taking action"
+        type: boolean
+        default: false
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  close-resolved:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close PRs whose upstream issue is resolved
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner  = context.repo.owner;
+            const repo   = context.repo.repo;
+            const label  = 'resolved-upstream';
+            const dryRun = context.payload.inputs?.dry_run === 'true';
+
+            // Fetch all open PRs (paginated)
+            const prs = await github.paginate(github.rest.pulls.list, {
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100,
+            });
+
+            // Match titles like "Reproduction for sentry-ruby#2842"
+            const titleRe = /^Reproduction for (sentry-[\w-]+#\d+)/;
+
+            for (const pr of prs) {
+              const match = pr.title.match(titleRe);
+              if (!match) continue;
+
+              // Skip if already labelled (already processed on a previous run)
+              if (pr.labels.some(l => l.name === label)) continue;
+
+              const [upstreamRepo, issueNumber] = match[1].split('#');
+
+              let issue;
+              try {
+                issue = await github.rest.issues.get({
+                  owner: 'getsentry',
+                  repo: upstreamRepo,
+                  issue_number: Number(issueNumber),
+                });
+              } catch (err) {
+                core.warning(
+                  `PR #${pr.number}: could not fetch getsentry/${upstreamRepo}#${issueNumber} — ${err.message}`
+                );
+                continue;
+              }
+
+              if (issue.data.state !== 'closed') continue;
+
+              core.info(`PR #${pr.number}: upstream getsentry/${upstreamRepo}#${issueNumber} is closed`);
+
+              if (dryRun) {
+                core.info(`  [dry run] would label and close PR #${pr.number}`);
+                continue;
+              }
+
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: pr.number,
+                labels: [label],
+              });
+
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pr.number,
+                body: [
+                  `Upstream issue [getsentry/${upstreamRepo}#${issueNumber}](https://github.com/getsentry/${upstreamRepo}/issues/${issueNumber}) has been closed.`,
+                  '',
+                  'Closing this reproduction PR. Re-open if the issue resurfaces!',
+                ].join('\n'),
+              });
+
+              await github.rest.pulls.update({
+                owner,
+                repo,
+                pull_number: pr.number,
+                state: 'closed',
+              });
+            }

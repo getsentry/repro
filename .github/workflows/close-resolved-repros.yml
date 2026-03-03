@@ -61,9 +61,9 @@ jobs:
                 continue;
               }
 
-              if (issue.data.state !== 'closed') continue;
+              if (issue.data.state !== 'closed' || issue.data.state_reason !== 'completed') continue;
 
-              core.info(`PR #${pr.number}: upstream getsentry/${upstreamRepo}#${issueNumber} is closed`);
+              core.info(`PR #${pr.number}: upstream getsentry/${upstreamRepo}#${issueNumber} is resolved`);
 
               if (dryRun) {
                 core.info(`  [dry run] would label and close PR #${pr.number}`);

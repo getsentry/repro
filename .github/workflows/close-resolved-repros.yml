@@ -70,13 +70,6 @@ jobs:
                 continue;
               }
 
-              await github.rest.issues.addLabels({
-                owner,
-                repo,
-                issue_number: pr.number,
-                labels: [label],
-              });
-
               await github.rest.issues.createComment({
                 owner,
                 repo,
@@ -93,5 +86,14 @@ jobs:
                 repo,
                 pull_number: pr.number,
                 state: 'closed',
+              });
+
+              // Label last — if closing fails above, the PR stays unlabelled
+              // and will be retried on the next run
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: pr.number,
+                labels: [label],
               });
             }

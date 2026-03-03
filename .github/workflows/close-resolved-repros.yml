@@ -70,30 +70,34 @@ jobs:
                 continue;
               }
 
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number: pr.number,
-                body: [
-                  `Upstream issue [getsentry/${upstreamRepo}#${issueNumber}](https://github.com/getsentry/${upstreamRepo}/issues/${issueNumber}) has been closed.`,
-                  '',
-                  'Closing this reproduction PR. Re-open if the issue resurfaces!',
-                ].join('\n'),
-              });
+              try {
+                // Close first — if this fails, the PR stays open and unlabelled
+                // so the next run retries cleanly with no duplicate comments
+                await github.rest.pulls.update({
+                  owner,
+                  repo,
+                  pull_number: pr.number,
+                  state: 'closed',
+                });
 
-              await github.rest.pulls.update({
-                owner,
-                repo,
-                pull_number: pr.number,
-                state: 'closed',
-              });
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: pr.number,
+                  body: [
+                    `Upstream issue [getsentry/${upstreamRepo}#${issueNumber}](https://github.com/getsentry/${upstreamRepo}/issues/${issueNumber}) has been closed.`,
+                    '',
+                    'Closing this reproduction PR. Re-open if the issue resurfaces!',
+                  ].join('\n'),
+                });
 
-              // Label last — if closing fails above, the PR stays unlabelled
-              // and will be retried on the next run
-              await github.rest.issues.addLabels({
-                owner,
-                repo,
-                issue_number: pr.number,
-                labels: [label],
-              });
+                await github.rest.issues.addLabels({
+                  owner,
+                  repo,
+                  issue_number: pr.number,
+                  labels: [label],
+                });
+              } catch (err) {
+                core.warning(`PR #${pr.number}: failed to close — ${err.message}`);
+              }
             }

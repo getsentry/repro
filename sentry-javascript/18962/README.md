@@ -4,9 +4,21 @@
 
 ## Description
 
-Sentry's tracing instrumentation (`tracesSampleRate: 1.0`) breaks OpenAI streaming when using LangGraph's `agent.stream()` with `streamMode: ["messages"]`. Instead of receiving incremental chunks, the entire response arrives in one or very few chunks.
+Sentry's tracing instrumentation (`tracesSampleRate: 1.0`) reportedly breaks OpenAI streaming when using LangChain/LangGraph's `agent.stream()` with `streamMode: ["messages"]`. Instead of receiving incremental chunks, the entire response arrives in one or very few chunks.
 
-The bug is specific to **agent-level streaming** (LangGraph `createReactAgent` + `agent.stream()`). Direct `model.stream()` calls appear to work correctly.
+## Test Results
+
+**On latest versions (`@sentry/nestjs@10.42.0`, `langchain@1.2.29`), the bug does not reproduce.**
+
+Both endpoints stream correctly with Sentry tracing enabled:
+
+| Endpoint | Sentry | Content Chunks | First Byte | Total |
+|---|---|---|---|---|
+| `/stream-agent` | OFF | ~40 | ~0.7s | ~1.2s |
+| `/stream-agent` | ON | ~46 | ~0.5s | ~1.0s |
+| `/stream-model` | ON | ~41 | ~0.7s | ~1.1s |
+
+The fix was likely included in one of the recent `@sentry/nestjs` releases (possibly PR #19122, released in 10.39.0). The issue was reported on 10.41.0 by @rad20c — pinning to that version may reproduce it.
 
 ## Steps to Reproduce
 
@@ -15,17 +27,12 @@ The bug is specific to **agent-level streaming** (LangGraph `createReactAgent` +
    npm install
    ```
 
-2. Export your OpenAI API key:
-   ```bash
-   export OPENAI_API_KEY=sk-your-key-here
+2. Add your OpenAI API key to `.env`:
+   ```
+   OPENAI_API_KEY=sk-your-key-here
    ```
 
-3. Optionally set a Sentry DSN (not required to see the streaming behavior):
-   ```bash
-   export SENTRY_DSN=
-   ```
-
-4. Run **without** Sentry (baseline - streaming works):
+3. Run **without** Sentry (baseline):
    ```bash
    npm run start:without-sentry
    ```
@@ -33,9 +40,8 @@ The bug is specific to **agent-level streaming** (LangGraph `createReactAgent` +
    ```bash
    curl http://localhost:3000/stream-agent
    ```
-   You should see chunks arriving incrementally.
 
-5. Stop the server, then run **with** Sentry (streaming breaks):
+4. Stop the server, then run **with** Sentry:
    ```bash
    npm run start:with-sentry
    ```
@@ -43,29 +49,12 @@ The bug is specific to **agent-level streaming** (LangGraph `createReactAgent` +
    ```bash
    curl http://localhost:3000/stream-agent
    ```
-   The response arrives all at once instead of streaming.
 
-6. For comparison, the direct model streaming endpoint works in both modes:
-   ```bash
-   curl http://localhost:3000/stream-model
-   ```
-
-## Expected Behavior
-
-`agent.stream()` should deliver chunks incrementally regardless of whether Sentry tracing is enabled.
-
-## Actual Behavior
-
-With `tracesSampleRate: 1.0`, the agent stream delivers the full response in one chunk (or very few chunks) instead of streaming incrementally. Removing `tracesSampleRate` or setting it to `0` restores correct streaming behavior.
-
-## Workarounds
-
-- Remove `tracesSampleRate` from Sentry config
-- Set `defaultIntegrations: false` (requires manually adding needed integrations)
+5. Compare chunk counts and timing between the two modes. The `/stream-model` endpoint is available for comparison with direct `ChatOpenAI` streaming.
 
 ## Environment
 
-- `@sentry/nestjs`: ^10.41.0
-- `@langchain/openai`: ^0.5.0
-- `@langchain/langgraph`: ^0.2.0
+- `@sentry/nestjs`: 10.42.0
+- `langchain`: 1.2.29
+- `@langchain/openai`: 1.2.12
 - Node.js: 18+

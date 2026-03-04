@@ -1,3 +1,4 @@
+import "dotenv/config";
 import * as Sentry from "@sentry/nestjs";
 
 if (process.env.ENABLE_SENTRY === "true") {

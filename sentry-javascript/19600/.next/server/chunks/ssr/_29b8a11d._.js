@@ -1,0 +1,5 @@
+;!function(){try { var e="undefined"!=typeof globalThis?globalThis:"undefined"!=typeof global?global:"undefined"!=typeof window?window:"undefined"!=typeof self?self:{},n=(new e.Error).stack;n&&((e._debugIds|| (e._debugIds={}))[n]="dde59247-9c8c-1f0f-2d60-0ea9e3df1351")}catch(e){}}();
+module.exports=[94367,a=>{a.n(a.i(16893))},70864,a=>{a.n(a.i(33290))},43619,a=>{a.n(a.i(79962))},13718,a=>{a.n(a.i(85523))},18198,a=>{a.n(a.i(45518))},50708,a=>{"use strict";var b=a.i(7997);function c(){return(0,b.jsxs)("main",{style:{padding:24},children:[(0,b.jsx)("h1",{children:"NextJS (Turbopack) + Clerk + Sentry Reproduction"}),(0,b.jsx)("p",{children:"Open Chrome DevTools to trigger the /.well-known request and observe the error."})]})}a.s(["default",()=>c])}];
+
+//# debugId=dde59247-9c8c-1f0f-2d60-0ea9e3df1351
+//# sourceMappingURL=_29b8a11d._.js.map

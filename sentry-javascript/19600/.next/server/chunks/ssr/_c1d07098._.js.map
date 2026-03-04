@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": [],
+  "debugId": "753d5817-296a-91a0-1b74-7ff72eeadee0",
+  "sections": [
+    {"offset": {"line": 1, "column": 0}, "map": {"version":3,"sources":["../../../../app/%5B...rest%5D/page.tsx"],"sourcesContent":["// This catch-all route is key to reproducing the bug.\n// When Turbopack is used with @sentry/nextjs, the /.well-known request\n// hits this catch-all route, and Clerk's middleware detection fails.\nexport default function CatchAll() {\n  return (\n    <main style={{ padding: 24 }}>\n      <h1>Catch-all route</h1>\n      <p>This page is rendered for all routes that don&apos;t match other pages.</p>\n    </main>\n  );\n}\n"],"names":[],"mappings":"8LAGe,SAAS,IACtB,MACE,CAAA,EAAA,EAAA,IAAA,EAAC,OAAA,CAAK,MAAO,CAAE,QAAS,EAAG,YACzB,CAAA,EAAA,EAAA,GAAA,EAAC,KAAA,UAAG,oBACJ,CAAA,EAAA,EAAA,GAAA,EAAC,IAAA,UAAE,yEAGT"}}]
+}

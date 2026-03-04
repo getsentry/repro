@@ -1,0 +1,6 @@
+{
+  "/[...rest]/page": "/[...rest]",
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/page": "/"
+}

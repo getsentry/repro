@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "debugId": "dde59247-9c8c-1f0f-2d60-0ea9e3df1351",
-  "sections": [
-    {"offset": {"line": 1, "column": 0}, "map": {"version":3,"sources":["../../../../app/page.tsx"],"sourcesContent":["export default function Home() {\n  return (\n    <main style={{ padding: 24 }}>\n      <h1>NextJS (Turbopack) + Clerk + Sentry Reproduction</h1>\n      <p>Open Chrome DevTools to trigger the /.well-known request and observe the error.</p>\n    </main>\n  );\n}\n"],"names":[],"mappings":"8LAAe,SAAS,IACtB,MACE,CAAA,EAAA,EAAA,IAAA,EAAC,OAAA,CAAK,MAAO,CAAE,QAAS,EAAG,YACzB,CAAA,EAAA,EAAA,GAAA,EAAC,KAAA,UAAG,qDACJ,CAAA,EAAA,EAAA,GAAA,EAAC,IAAA,UAAE,sFAGT"}}]
-}

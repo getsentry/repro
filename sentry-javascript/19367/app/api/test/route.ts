@@ -1,18 +1,60 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 
-// This route triggers OTel context propagation on every request.
-// With @sentry/nextjs 10.38.0 + Next.js 16 Turbopack, @opentelemetry/api ends up
-// bundled in two separate chunks. Each chunk's ContextAPI.with() delegates to the
-// other copy's with(), creating infinite mutual recursion →
-// RangeError: Maximum call stack size exceeded
+/**
+ * Simulates a realistic API route that creates nested Sentry spans.
+ *
+ * In production, auto-instrumentation (HTTP, Prisma, etc.) creates spans
+ * around every request and DB query. Each Sentry.startSpan() call in 10.38.0
+ * internally calls context.with() THREE times (suppressed ctx → startActiveSpan
+ * → active ctx). With Turbopack's duplicate @opentelemetry/api modules, this
+ * 3-deep nesting × N nested spans can spiral into infinite recursion.
+ *
+ * The crash is intermittent because it depends on Node.js event loop timing
+ * and which module copy's ContextAPI handles each context.with() call.
+ */
 export async function GET() {
-  // Simulate a minimal workload so Sentry/OTel creates spans
-  const start = Date.now();
-  await new Promise((resolve) => setTimeout(resolve, 1));
+  // Outer span — simulates the HTTP instrumentation auto-span
+  return Sentry.startSpan({ name: "GET /api/test" }, async () => {
+    // Inner span — simulates a DB query (e.g., Prisma)
+    const dbResult = await Sentry.startSpan(
+      { name: "prisma:query SELECT" },
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 2));
+        return { users: 42 };
+      }
+    );
 
-  return NextResponse.json({
-    status: "ok",
-    timestamp: Date.now(),
-    duration: Date.now() - start,
+    // Another inner span — simulates a second DB query
+    const cacheResult = await Sentry.startSpan(
+      { name: "redis:get session" },
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        return { cached: true };
+      }
+    );
+
+    // Deeply nested span — simulates calling an external API
+    const apiResult = await Sentry.startSpan(
+      { name: "http:POST /external-api" },
+      async () => {
+        // Nested span inside the external call
+        return Sentry.startSpan(
+          { name: "serialize:response" },
+          async () => {
+            await new Promise((resolve) => setTimeout(resolve, 1));
+            return { ok: true };
+          }
+        );
+      }
+    );
+
+    return NextResponse.json({
+      status: "ok",
+      dbResult,
+      cacheResult,
+      apiResult,
+      timestamp: Date.now(),
+    });
   });
 }

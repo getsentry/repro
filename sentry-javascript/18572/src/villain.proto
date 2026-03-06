@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package villain;
+
+service VillainService {
+  rpc FindOne (VillainById) returns (Villain) {}
+  rpc FindMany (VillainQuery) returns (Villains) {}
+}
+
+message VillainById {
+  int32 id = 1;
+}
+
+message VillainQuery {
+  string name = 1;
+}
+
+message Villain {
+  int32 id = 1;
+  string name = 2;
+}
+
+message Villains {
+  repeated Villain villains = 1;
+}

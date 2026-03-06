@@ -32,8 +32,6 @@ const sentryClient = Sentry.init({
   environment: process.env.DEPLOYMENT_ENV || 'development',
   skipOpenTelemetrySetup: true,
   integrations: [Sentry.httpIntegration({ spans: false })],
-  // The reporter originally had tracesSampleRate: 1.0 but was told to remove it.
-  // Including it here to match the original setup that triggered the bug.
   tracesSampleRate: 1.0,
   enabled: true,
 });
@@ -44,8 +42,12 @@ const resource = resourceFromAttributes({
   'service.instance.id': os.hostname() || 'unknown',
 });
 
-// Use console exporter so we can see spans without a real collector
 const consoleExporter = new ConsoleSpanExporter();
+
+// Reporter's setup: traceExporter passed both as top-level AND inside BatchSpanProcessor.
+// This causes the same exporter to be registered twice, which may interact with context
+// in unexpected ways.
+const traceExporter = new OTLPTraceExporter();
 
 const customSampler = new ParentBasedSampler({
   root: new CustomSampler(),
@@ -53,12 +55,14 @@ const customSampler = new ParentBasedSampler({
 
 const sdk = new opentelemetry.NodeSDK({
   resource,
+  traceExporter, // <-- registered here (top-level)
   textMapPropagator: new CompositePropagator({
     propagators: [new W3CTraceContextPropagator(), new SentryPropagator()],
   }),
   contextManager: new Sentry.SentryContextManager(),
   sampler: customSampler,
   spanProcessors: [
+    new BatchSpanProcessor(traceExporter), // <-- and here (duplicate)
     new ContextDebugSpanProcessor(),
     new SimpleSpanProcessor(consoleExporter),
     new SentrySpanProcessor(),

@@ -14,8 +14,6 @@ import * as opentelemetry from '@opentelemetry/sdk-node';
 import {
   BatchSpanProcessor,
   ParentBasedSampler,
-  SimpleSpanProcessor,
-  ConsoleSpanExporter,
 } from '@opentelemetry/sdk-trace-node';
 import {
   ATTR_SERVICE_NAME,
@@ -42,8 +40,6 @@ const resource = resourceFromAttributes({
   'service.instance.id': os.hostname() || 'unknown',
 });
 
-const consoleExporter = new ConsoleSpanExporter();
-
 // Reporter's setup: traceExporter passed both as top-level AND inside BatchSpanProcessor.
 // This causes the same exporter to be registered twice, which may interact with context
 // in unexpected ways.
@@ -64,7 +60,6 @@ const sdk = new opentelemetry.NodeSDK({
   spanProcessors: [
     new BatchSpanProcessor(traceExporter), // <-- and here (duplicate)
     new ContextDebugSpanProcessor(),
-    new SimpleSpanProcessor(consoleExporter),
     new SentrySpanProcessor(),
   ],
   instrumentations: [

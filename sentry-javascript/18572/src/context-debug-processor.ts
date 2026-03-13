@@ -6,6 +6,10 @@ import { SpanProcessor, ReadableSpan } from '@opentelemetry/sdk-trace-node';
 import type { Span } from '@opentelemetry/sdk-trace-node';
 
 export class ContextDebugSpanProcessor implements SpanProcessor {
+  private orphanCount = 0;
+  private parentedCount = 0;
+  private readonly LOG_LIMIT = 10;
+
   forceFlush(): Promise<void> {
     return Promise.resolve();
   }
@@ -15,35 +19,35 @@ export class ContextDebugSpanProcessor implements SpanProcessor {
   }
 
   onStart(span: Span): void {
-    const parentContext = context.active();
-    const parentSpan = trace.getSpan(parentContext);
-    const spanContext = span.spanContext();
-    const parentSpanContext = parentSpan?.spanContext();
-
-    const isRoot = !parentSpanContext || parentSpanContext.traceId !== spanContext.traceId;
-
-    if (isRoot) {
-      console.log(
-        `[CONTEXT-DEBUG] ROOT span started: "${span['name'] || 'unknown'}" ` +
-        `traceId=${spanContext.traceId} spanId=${spanContext.spanId}`
-      );
-    } else {
-      console.log(
-        `[CONTEXT-DEBUG] CHILD span started: "${span['name'] || 'unknown'}" ` +
-        `traceId=${spanContext.traceId} spanId=${spanContext.spanId} ` +
-        `parentSpanId=${parentSpanContext.spanId}`
-      );
-    }
+    // Logging moved to onEnd for a unified view
   }
 
   onEnd(span: ReadableSpan): void {
-    // Check if this span has a parentSpanId set
     const parentSpanId = (span as any).parentSpanId;
+    const sc = span.spanContext();
+
     if (!parentSpanId) {
-      console.log(
-        `[CONTEXT-DEBUG] ORPHAN span ended (no parent): "${span.name}" ` +
-        `traceId=${span.spanContext().traceId} spanId=${span.spanContext().spanId}`
-      );
+      this.orphanCount++;
+      if (this.orphanCount <= this.LOG_LIMIT) {
+        console.log(
+          `[CONTEXT-DEBUG] ORPHAN (${this.orphanCount}) span: "${span.name}" ` +
+          `traceId=${sc.traceId} spanId=${sc.spanId}`
+        );
+      }
+      if (this.orphanCount === this.LOG_LIMIT) {
+        console.log(`[CONTEXT-DEBUG] ... further ORPHAN logs suppressed (limit ${this.LOG_LIMIT})`);
+      }
+    } else {
+      this.parentedCount++;
+      if (this.parentedCount <= this.LOG_LIMIT) {
+        console.log(
+          `[CONTEXT-DEBUG] PARENTED (${this.parentedCount}) span: "${span.name}" ` +
+          `traceId=${sc.traceId} spanId=${sc.spanId} parentSpanId=${parentSpanId}`
+        );
+      }
+      if (this.parentedCount === this.LOG_LIMIT) {
+        console.log(`[CONTEXT-DEBUG] ... further PARENTED logs suppressed (limit ${this.LOG_LIMIT})`);
+      }
     }
   }
 }

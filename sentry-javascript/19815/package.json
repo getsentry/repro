@@ -1,0 +1,13 @@
+{
+  "name": "sentry-repro-19815",
+  "version": "1.0.0",
+  "description": "Reproduction for sentry-javascript#19815: All errors assigned to same trace when tracing is disabled",
+  "type": "module",
+  "scripts": {
+    "start": "node --import ./instrument.js app.js"
+  },
+  "dependencies": {
+    "@sentry/node": "10.43.0",
+    "express": "^5.2.1"
+  }
+}

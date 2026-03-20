@@ -1,14 +1,13 @@
 // A custom SpanProcessor that logs context propagation details.
 // This helps visualize whether spans are correctly parented or appear as orphaned root spans.
 
-import { context, trace } from '@opentelemetry/api';
 import { SpanProcessor, ReadableSpan } from '@opentelemetry/sdk-trace-node';
 import type { Span } from '@opentelemetry/sdk-trace-node';
 
 export class ContextDebugSpanProcessor implements SpanProcessor {
   private orphanCount = 0;
   private parentedCount = 0;
-  private readonly LOG_LIMIT = 10;
+  private readonly LOG_LIMIT = 1000;
 
   forceFlush(): Promise<void> {
     return Promise.resolve();
@@ -23,7 +22,8 @@ export class ContextDebugSpanProcessor implements SpanProcessor {
   }
 
   onEnd(span: ReadableSpan): void {
-    const parentSpanId = (span as any).parentSpanId;
+    // OTel SDK 2.x uses parentSpanContext (full SpanContext), not parentSpanId
+    const parentSpanId = span.parentSpanContext?.spanId;
     const sc = span.spanContext();
 
     if (!parentSpanId) {

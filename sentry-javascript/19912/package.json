@@ -1,0 +1,17 @@
+{
+  "name": "repro-sentry-javascript-19912",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node --require dotenv/config index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "@sentry/node": "^10.45.0",
+    "dotenv": "^16.4.7"
+  },
+  "volta": {
+    "node": "22.14.0",
+    "yarn": "1.22.22"
+  }
+}

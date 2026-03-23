@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "repro-5734",
+    "slug": "repro-5734",
+    "version": "1.0.0",
+    "jsEngine": "hermes",
+    "plugins": [
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "your-org",
+          "project": "your-project",
+          "useNativeInit": true,
+          "options": {
+            "dsn": "https://1df17bd4e543fdb31351dee1768bb679@o447951.ingest.sentry.io/5428561",
+            "debug": true,
+            "environment": "dev",
+            "enableAutoSessionTracking": true,
+            "tracesSampleRate": 1,
+            "spotlight": true
+          }
+        }
+      ]
+    ],
+    "android": {
+      "package": "com.repro5734"
+    },
+    "ios": {
+      "bundleIdentifier": "com.repro5734"
+    }
+  }
+}

@@ -86,7 +86,7 @@ coverage/
 **/.ruby-gemset
 
 # Python 
-**pycache**
+__pycache__/
 
 # Temporary files
 **/tmp/

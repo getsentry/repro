@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "repro-5508",
+    "slug": "repro-5508",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "newArchEnabled": true,
+    "platforms": ["ios", "android"],
+    "plugins": [
+      ["@sentry/react-native/expo", {}]
+    ]
+  }
+}

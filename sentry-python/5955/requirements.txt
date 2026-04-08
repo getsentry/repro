@@ -1,0 +1,2 @@
+django>=4.2,<5.0
+sentry-sdk>=2.57.0

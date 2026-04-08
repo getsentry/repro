@@ -98,6 +98,7 @@ if captured_events:
 
     print(f"  Captured URL: {captured_url}")
     print(f"  URL starts with https: {captured_url.startswith('https://')}")
+    print(f"  wsgi.url_scheme in environ: {environ.get('wsgi.url_scheme')}")
     print()
 
     # Show the mismatch

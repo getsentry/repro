@@ -53,9 +53,7 @@ defmodule Repro do
     Task.await(task)
 
     # Give the span processor time to flush
-    Process.sleep(500)
-    :otel_batch_processor.force_flush(:otel_tracer_provider)
-    Process.sleep(500)
+    Process.sleep(1000)
 
     IO.puts("""
     \n=== EXPECTED BEHAVIOR ===

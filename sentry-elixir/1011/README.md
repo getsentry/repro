@@ -66,10 +66,6 @@ In `Sentry.OpenTelemetry.SpanProcessor.process_span/1`, the processor looks up t
 
 The issue reporter suggests the fix may be to treat all spans whose parent doesn't exist in `SpanStorage` as a transaction root, so they are still reported.
 
-## Notes
-
-This reproduction was not verified locally (Elixir was not available on the authoring machine). Please confirm the behavior after running the steps above.
-
 ## Environment
 
 - Elixir: >= 1.15

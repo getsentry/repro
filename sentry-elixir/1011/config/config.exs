@@ -1,9 +1,9 @@
 import Config
 
 config :sentry,
-  dsn: System.get_env("SENTRY_DSN") || "",
   environment_name: :dev,
-  enable_source_code_context: false
+  enable_source_code_context: false,
+  client: Sentry.HackneyClient
 
 # Configure OpenTelemetry to use the Sentry span processor
 config :opentelemetry,

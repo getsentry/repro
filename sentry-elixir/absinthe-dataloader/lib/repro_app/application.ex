@@ -8,6 +8,7 @@ defmodule ReproApp.Application do
     OpentelemetryPhoenix.setup(adapter: :cowboy2)
     OpentelemetryEcto.setup([:repro_app, :repo], db_statement: :enabled)
     OpentelemetryAbsinthe.setup()
+    OpentelemetryDataloader.setup()
 
     children = [
       ReproApp.Repo,

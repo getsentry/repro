@@ -14,43 +14,48 @@ Both endpoints return the same data (authors with their posts), but use differen
 ## Prerequisites
 
 - Elixir >= 1.17
-- PostgreSQL running locally
+- Docker (for PostgreSQL) or PostgreSQL running locally
 - A Sentry DSN (optional — works without one for local Spotlight inspection)
 
 ## Steps to Reproduce
 
-1. Install dependencies:
+1. Start PostgreSQL:
    ```bash
    cd sentry-elixir/absinthe-dataloader
+   docker compose up -d
+   ```
+
+2. Install dependencies:
+   ```bash
    mix deps.get
    ```
 
-2. Set up the database:
+3. Set up the database:
    ```bash
    mix ecto.setup
    ```
 
-3. Set your Sentry DSN (optional):
+4. Set your Sentry DSN (optional):
    ```bash
    export SENTRY_DSN="your-dsn-here"
    ```
 
-4. (Optional) Start Spotlight for local event inspection:
+5. (Optional) Start Spotlight for local event inspection:
    ```bash
    npx @spotlightjs/spotlight
    ```
 
-5. Start the server:
+6. Start the server:
    ```bash
    mix phx.server
    ```
 
-6. Hit the **Ecto endpoint**:
+7. Hit the **Ecto endpoint**:
    ```bash
    curl http://localhost:4000/ecto/authors
    ```
 
-7. Hit the **GraphQL/Dataloader endpoint**:
+8. Hit the **GraphQL/Dataloader endpoint**:
    ```bash
    curl -X POST http://localhost:4000/graphql \
      -H "Content-Type: application/json" \
@@ -59,7 +64,7 @@ Both endpoints return the same data (authors with their posts), but use differen
 
    Or open http://localhost:4000/graphiql in a browser.
 
-8. Compare the traces in Sentry (or Spotlight) — look at how Ecto spans differ between the two endpoints.
+9. Compare the traces in Sentry (or Spotlight) — look at how Ecto spans differ between the two endpoints.
 
 ## Expected Behavior
 

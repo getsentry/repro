@@ -29,7 +29,10 @@ config :sentry,
   enable_source_code_context: true,
   root_source_code_paths: [File.cwd!()]
 
-# OpenTelemetry config — use Sentry span processor + sampler
+# OpenTelemetry config
+# NOTE: Toggle between Sentry and default OTel config to isolate the issue.
+
+# Sentry span processor + sampler:
 config :opentelemetry,
   span_processor: {Sentry.OpenTelemetry.SpanProcessor, []},
   sampler: {Sentry.OpenTelemetry.Sampler, []},

@@ -39,10 +39,12 @@ defmodule ReproApp.MixProject do
 
       # Sentry
       {:sentry, "~> 12.0"},
+      {:finch, "~> 0.19"},
 
       # OpenTelemetry
       {:opentelemetry, "~> 1.7"},
       {:opentelemetry_api, "~> 1.5"},
+      {:opentelemetry_exporter, "~> 1.10"},
       {:opentelemetry_cowboy, "~> 1.0"},
       {:opentelemetry_ecto, "~> 1.2"},
       {:opentelemetry_phoenix, "~> 2.0"},

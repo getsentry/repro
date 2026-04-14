@@ -33,7 +33,7 @@ config :sentry,
 config :opentelemetry,
   span_processor: {Sentry.OpenTelemetry.SpanProcessor, []},
   sampler: {Sentry.OpenTelemetry.Sampler, []},
-  text_map_propagators: [OpentelemetrySentry.Propagator]
+  text_map_propagators: [:trace_context, :baggage, Sentry.OpenTelemetry.Propagator]
 
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",

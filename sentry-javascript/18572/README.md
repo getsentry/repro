@@ -2,6 +2,17 @@
 
 **Issue:** https://github.com/getsentry/sentry-javascript/issues/18572
 
+## Current Verdict
+
+This setup matches the reporter's architecture and is useful for investigating the issue, but it is **not currently a confirmed local reproduction**.
+
+On this branch, local testing with the included load client produced:
+- normal `EXPECTED_ROOT` entries for top-level request spans
+- correctly parented `CHILD` spans for gRPC and internal work
+- no `UNEXPECTED_ROOT` spans during the observed runs
+
+Treat this directory as an investigation harness for `sentry-javascript#18572`, not proof that the bug reproduces locally.
+
 ## Description
 
 OpenTelemetry context is not propagated correctly when using `@sentry/nestjs` with a custom OpenTelemetry setup (`skipOpenTelemetrySetup: true`) and `SentryContextManager`. Traces randomly break into multiple partial traces, with internal spans appearing as root spans instead of being children of the correct parent.
@@ -21,7 +32,7 @@ This reproduction creates a NestJS hybrid app with both HTTP and gRPC endpoints,
 - Custom OTel SDK with `SentryContextManager`, `SentryPropagator`, and `SentrySpanProcessor`
 - Custom sampler using `wrapSamplingDecision` (matches reporter's health-check filter)
 - gRPC microservice with `@opentelemetry/instrumentation-grpc`
-- A `ContextDebugSpanProcessor` that logs root vs child spans to help identify broken context propagation
+- A `ContextDebugSpanProcessor` that separates `EXPECTED_ROOT`, `CHILD`, and `UNEXPECTED_ROOT` spans so normal request roots are not mistaken for broken propagation
 
 ## Steps to Reproduce
 
@@ -47,8 +58,9 @@ This reproduction creates a NestJS hybrid app with both HTTP and gRPC endpoints,
    ```
 
 5. Check the server logs for `[CONTEXT-DEBUG]` entries. Look for:
-   - `ORPHAN span ended (no parent)` - indicates broken context propagation
-   - `ROOT span started` on spans that should be children (e.g., `db-lookup`, `validation`)
+   - `UNEXPECTED_ROOT` on spans that should have a parent (for example `grpc.*`, `db-lookup`, `validation`, controller spans)
+   - `EXPECTED_ROOT` on incoming request spans such as `GET /test-grpc` - these are normal
+   - `CHILD` spans sharing the same `traceId` as their surrounding request - this indicates healthy propagation
 
 ## Testing with different Sentry versions
 
@@ -74,17 +86,26 @@ HTTP GET /test-grpc (root)
        └── db-lookup (child)
 ```
 
-## Actual Behavior
+## Reported Actual Behavior
 
 Under load (especially with gRPC), context is randomly lost, causing spans to appear as independent root spans with different trace IDs:
 
 ```
 HTTP GET /test-grpc (root, traceId=aaa)
-gRPC /hero.HeroService/FindOne (root, traceId=bbb)  <-- should be child of above
-db-lookup (root, traceId=ccc)                         <-- should be child of above
+[CONTEXT-DEBUG] UNEXPECTED_ROOT "grpc.hero.HeroService/FindOne" traceId=bbb  <-- should be child of above
+[CONTEXT-DEBUG] UNEXPECTED_ROOT "db-lookup" traceId=ccc                       <-- should be child of above
 ```
 
-**Note:** The reporter was unable to reproduce this locally and only sees it in production. The reproduction provides the minimal setup that triggers the issue. It may require higher concurrency or a production-like environment to manifest.
+`EXPECTED_ROOT` entries for top-level spans like `GET /test-grpc` are normal and are not evidence of the bug by themselves.
+
+## Local Result So Far
+
+Using the setup in this directory and the included load client, the issue has not been observed locally so far. In the observed runs:
+- request root spans were logged as `EXPECTED_ROOT`
+- gRPC spans and internal spans remained children of the request trace
+- no suspicious `UNEXPECTED_ROOT` spans were emitted
+
+**Note:** The reporter was unable to reproduce this locally and only sees it in production. The reproduction provides the minimal setup to investigate the issue, but it may require higher concurrency or a production-like environment to manifest.
 
 ## Environment
 

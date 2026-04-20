@@ -45,8 +45,8 @@ async function runTest() {
   }
   await Promise.all(burst);
 
-  console.log('\n=== Done. Check server logs for [CONTEXT-DEBUG] ORPHAN entries. ===');
-  console.log('Orphaned spans indicate broken context propagation.');
+  console.log('\n=== Done. Check server logs for [CONTEXT-DEBUG] UNEXPECTED_ROOT entries. ===');
+  console.log('EXPECTED_ROOT spans like "GET /..." are normal. UNEXPECTED_ROOT spans may indicate context loss.');
 }
 
 runTest().catch(console.error);

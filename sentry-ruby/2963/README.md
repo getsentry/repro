@@ -41,11 +41,11 @@ E, [...] ERROR -- sentry: ** [Sentry] Envelope sending failed: deadlock; recursi
 E, [...] ERROR -- sentry: ** [Sentry] [Sentry::MetricEventBuffer] Failed to send Sentry::MetricEvent: deadlock; recursive locking
 ```
 
-The deadlock causes metrics to be silently dropped on every flush cycle. Failed flushes accumulate buffered events, leading to steady memory growth.
+The deadlock causes metrics to be silently dropped on every flush cycle. RSS grows steadily despite stable GC live_slots, indicating heap fragmentation from the repeated `ThreadError` allocation/deallocation cycle on each failed flush.
 
 ## Reproduction Evidence
 
-The script simulates Yabeda's behavior by having the transport call `Sentry.metrics.count()` during `send_data`, which re-enters `MetricEventBuffer#add_item` while the flush already holds the mutex.
+The script simulates Yabeda's behavior by having the transport call `Sentry.metrics.count()` during `send_data`, which re-enters `MetricEventBuffer#add_item` while the flush already holds the mutex. Over 10 rounds of 500 metrics each, RSS grows ~5-7 MB while live_slots remain flat.
 
 ## Environment
 

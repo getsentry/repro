@@ -1,28 +1,40 @@
 require "sentry-ruby"
+require "sentry-yabeda"
+require "yabeda/http_requests"
 
-# Simulates the re-entrancy deadlock caused by Yabeda HTTP instrumentation.
+# End-to-end reproduction of the re-entrancy deadlock in Sentry's
+# TelemetryEventBuffer when Yabeda HTTP instrumentation is active.
 #
-# In production, the call chain is:
-#   MetricEventBuffer#add_item → @mutex.synchronize → send_items
-#     → HTTPTransport#send_data → Net::HTTP POST
-#       → Yabeda HTTP instrumentation fires
-#         → Sentry.metrics.count(...)
-#           → MetricEventBuffer#add_item → @mutex.synchronize → DEADLOCK
+# Nothing here is simulated. `sentry-yabeda` registers a real Yabeda adapter
+# that forwards every Yabeda metric into Sentry.metrics, and `yabeda-http_requests`
+# patches Net::HTTP to record a metric on every outgoing request. The flush's own
+# HTTP POST therefore re-enters the metrics API:
 #
-# We simulate this by having the transport call Sentry.metrics during send_data.
-class ReentrantTransport < Sentry::Transport
-  def send_data(data, options = {})
-    Sentry.metrics.count("http.request", value: 1)
-  end
-end
+#   Sentry.metrics.count(...)
+#     → MetricEventBuffer#flush → @mutex.synchronize → send_items
+#       → HTTPTransport#send_data → Net::HTTP POST   (to Sentry ingest)
+#         → sniffer patch on Net::HTTP fires
+#           → Yabeda::HttpRequests::Sniffer#request
+#             → Yabeda.http_request_total.increment
+#               → Sentry::Yabeda::Adapter#perform_counter_increment!
+#                 → Sentry.metrics.count("http.request_total")
+#                   → MetricEventBuffer#add_item → @mutex.synchronize → DEADLOCK
+#
+# Ruby's Mutex is non-reentrant, so the flush thread re-locking the mutex it
+# already holds raises `ThreadError: deadlock; recursive locking`.
+#
+# Set SENTRY_DSN to a real DSN so the flush performs an actual HTTP POST, which
+# is what triggers the Yabeda Net::HTTP instrumentation.
+
+# Register the Yabeda metrics declared by yabeda-http_requests with the adapters.
+Yabeda.configure!
 
 Sentry.init do |config|
-  config.dsn = ENV.fetch("SENTRY_DSN", "https://examplePublicKey@o0.ingest.sentry.io/0")
+  config.dsn = ENV.fetch("SENTRY_DSN")
   config.enable_logs = true
   config.enable_metrics = true
   config.enabled_patches = %i[logger]
-  config.transport.transport_class = ReentrantTransport
-  config.sdk_logger.level = Logger::FATAL
+  config.sdk_logger.level = Logger::DEBUG
 end
 
 GC.start
@@ -52,4 +64,5 @@ puts "\nFinal: RSS=#{final_rss} KB (%+d), live_slots=#{final_live} (%+d)" % [
 ]
 puts "\nIf you saw 'deadlock; recursive locking' errors above, the bug is reproduced."
 puts "RSS growth despite stable live_slots indicates heap fragmentation from repeated ThreadError cycles."
+
 Sentry.close

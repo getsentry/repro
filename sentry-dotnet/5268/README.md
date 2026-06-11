@@ -4,67 +4,60 @@
 
 ## Description
 
-When using both `builder.WebHost.UseSentry(dsn)` and `.WriteTo.Sentry()` (Serilog sink) together with a real DSN, `builder.Build()` throws an exception. The Serilog Sentry sink attempts to initialize the SDK separately, conflicting with the ASP.NET Core integration's initialization.
-
-This reproduces the bug reported in the `Sentry.Samples.AspNetCore.Serilog` sample when a real DSN is provided.
-
-## Prerequisites
-
-- .NET 8.0 SDK (or later)
+When using both `builder.WebHost.UseSentry(dsn)` and `.WriteTo.Sentry(options => {...})` (Serilog sink with `Action<SentrySerilogOptions>` overload), `builder.Build()` throws an `ArgumentNullException`. The Serilog sink calls `SentrySdk.Init()` with options that have no DSN set — the DSN configured via `UseSentry(dsn)` is not available to the sink at that point.
 
 ## Steps to Reproduce
 
-### Variant 1: DSN via code
+### With Docker
 
-1. Install dependencies:
-   ```bash
-   dotnet restore
-   ```
+```bash
+docker build -t sentry-repro-5268 .
+docker run --rm sentry-repro-5268
+```
 
-2. Run the reproduction:
-   ```bash
-   dotnet run
-   ```
+### Without Docker
 
-   The DSN is hardcoded as a placeholder. You can also set a real one:
-   ```bash
-   export SENTRY_DSN="https://your-key@o0.ingest.sentry.io/0"
-   dotnet run
-   ```
+Requires .NET 8.0+ SDK.
 
-### Variant 2: DSN via appsettings.json
+**Variant 1** — DSN via code (default):
+```bash
+dotnet restore
+dotnet run
+```
 
-1. Replace `Program.cs` with the appsettings variant:
-   ```bash
-   mv Program.cs Program.Inline.cs
-   mv Program.AppSettings.cs Program.cs
-   ```
-
-2. The DSN is already set in `appsettings.json`. Run:
-   ```bash
-   dotnet restore
-   dotnet run
-   ```
+**Variant 2** — DSN via appsettings.json:
+```bash
+dotnet restore
+USE_APPSETTINGS=1 dotnet run
+```
 
 ## Expected Behavior
 
-The application starts successfully and serves requests on `http://localhost:5000`.
+The application starts successfully.
 
 ## Actual Behavior
 
-An exception is thrown at `builder.Build()` due to the Sentry SDK being initialized twice — once by the ASP.NET Core integration (`UseSentry(dsn)`) and again by the Serilog sink (`.WriteTo.Sentry()`).
+`builder.Build()` throws:
+
+```
+System.ArgumentNullException: Value cannot be null.
+(Parameter 'You must supply a DSN to use Sentry. To disable Sentry, pass an empty string: "".
+See https://docs.sentry.io/platforms/dotnet/configuration/options/#dsn')
+   at Sentry.Internal.SettingLocator.GetDsn()
+   at Sentry.SentrySdk.InitHub(SentryOptions options)
+   at Sentry.SentrySdk.Init(SentryOptions options)
+   at Serilog.SentrySinkExtensions.Sentry(...)
+```
+
+The Serilog sink's `.WriteTo.Sentry(Action<SentrySerilogOptions>)` overload calls `SentrySdk.Init()` internally, but the DSN is null because it was configured separately via `UseSentry(dsn)`.
 
 ## Workaround
 
-Remove the DSN parameter from `UseSentry()` and avoid setting `Sentry.Dsn` in appsettings, or use the simpler Serilog overload that doesn't trigger SDK initialization:
+Use the simpler Serilog overload that doesn't trigger SDK initialization:
 
 ```csharp
 .WriteTo.Sentry(minimumBreadcrumbLevel: LogEventLevel.Debug, minimumEventLevel: LogEventLevel.Error)
 ```
-
-## Note
-
-This reproduction was not tested locally (no .NET SDK available on the build machine). The code follows the exact pattern described in the issue and the upstream sample code. Please verify by running `dotnet run` with a .NET 8+ SDK.
 
 ## Environment
 

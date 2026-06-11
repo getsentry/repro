@@ -8,34 +8,56 @@ using Serilog.Events;
 //
 // The Serilog Sentry sink tries to initialize the SDK separately,
 // conflicting with the ASP.NET Core integration's initialization.
+//
+// Variant 1 (default): DSN provided inline via UseSentry(dsn)
+// Variant 2: Set USE_APPSETTINGS=1 to read DSN from appsettings.json instead
 
 var dsn = Environment.GetEnvironmentVariable("SENTRY_DSN")
     ?? "https://examplePublicKey@o0.ingest.sentry.io/0";
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Step 1: Configure Serilog with the Sentry sink
 builder.Host.UseSerilog((_, c) =>
     c.Enrich.FromLogContext()
         .MinimumLevel.Debug()
         .WriteTo.Console()
-        // This configures the Serilog Sentry sink
         .WriteTo.Sentry(s =>
         {
             s.MinimumBreadcrumbLevel = LogEventLevel.Debug;
             s.MinimumEventLevel = LogEventLevel.Error;
         }));
 
-// Step 2: Also configure Sentry via ASP.NET Core integration with a DSN
-// When a DSN is provided here, both integrations try to initialize the SDK
-builder.WebHost.UseSentry(dsn);
+if (Environment.GetEnvironmentVariable("USE_APPSETTINGS") == "1")
+{
+    // Variant 2: reads DSN from appsettings.json "Sentry:Dsn"
+    builder.WebHost.UseSentry();
+}
+else
+{
+    // Variant 1: DSN provided directly
+    builder.WebHost.UseSentry(dsn);
+}
 
-// Step 3: This call throws an exception due to the double initialization
 // EXPECTED: Build succeeds without errors
-// ACTUAL: Exception is thrown
-var app = builder.Build();
-
-app.MapGet("/", () => "Hello World");
-
-Console.WriteLine("If you see this, the bug did NOT reproduce - builder.Build() succeeded.");
-app.Run();
+// ACTUAL: Exception is thrown due to double SDK initialization
+try
+{
+    var app = builder.Build();
+    app.MapGet("/", () => "Hello World");
+    Console.WriteLine("Bug NOT reproduced - builder.Build() succeeded.");
+    app.Run();
+}
+catch (Exception ex)
+{
+    Console.WriteLine("BUG CONFIRMED: builder.Build() threw an exception");
+    Console.WriteLine($"Exception type: {ex.GetType().FullName}");
+    Console.WriteLine($"Message: {ex.Message}");
+    if (ex.InnerException != null)
+    {
+        Console.WriteLine($"Inner exception: {ex.InnerException.GetType().FullName}");
+        Console.WriteLine($"Inner message: {ex.InnerException.Message}");
+    }
+    Console.WriteLine();
+    Console.WriteLine($"Full stack trace:\n{ex}");
+    Environment.Exit(1);
+}

@@ -1,0 +1,8 @@
+source "https://rubygems.org"
+
+# Point at the local checkout / branch under development (feat/fiber-hub-storage)
+gem "sentry-ruby", path: "/Users/neel/sentry/sdks/sentry-ruby/sentry-ruby"
+
+gem "falcon"
+gem "async"
+gem "debug"

@@ -1,0 +1,6 @@
+[tools]
+ruby = "3.3"
+
+[tasks.serve]
+description = "Run the Falcon repro server"
+run = "bundle exec falcon serve -b http://localhost:9292 --count 1 --threaded"

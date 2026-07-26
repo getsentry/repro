@@ -1,0 +1,11 @@
+@SentryLoggingRepro_HostAddress = http://localhost:4819
+
+GET {{SentryLoggingRepro_HostAddress}}/test/
+Accept: application/json
+
+###
+
+GET {{SentryLoggingRepro_HostAddress}}/test-detailed/
+Accept: application/json
+
+###

@@ -26,6 +26,7 @@ public final class MainActivity extends Activity {
                 + "\nRuntime type: " + runtimeType
                 + "\n\n" + stack);
         setContentView(output);
+        android.util.Log.e("Error", "It failed", throwable);
     }
 
     private static Throwable createThrowable(boolean diagnostic) {

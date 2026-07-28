@@ -79,6 +79,20 @@ A crash reporter records `a` as the raw type. Class-name retracing maps `a` to
 `DiagnosticTestException`, while stack retracing can recover the
 `ExampleNonFatal.<init>` frame.
 
+### R8 Retrace behavior
+
+Verified that the R8's own Retrace tool v9.3.16 (build 65eb2ed58d2ac1dbce414b51a8ea877c3ce5f68a from go/r8bot (luci-r8-custom-ci-archive-0-ib6e)) also cannot retrace this back to the original (`ExampleNonFatal`) exception type:
+
+```txt
+com.example.myapp.DiagnosticTestException: example failure
+    at com.example.myapp.ExampleNonFatal.<init>(ExampleNonFatal.java:5)
+    at com.example.myapp.MainActivity.createThrowable(MainActivity.java:37)
+    at com.example.myapp.MainActivity.onCreate(MainActivity.java:17)
+    at android.app.Activity.performCreate(Activity.java:8000)
+    at android.app.Activity.performCreate(Activity.java:7984)
+    at android.app.Instrumentation.callActivityOnCreate(Instrumentation.java:1309)
+```
+
 ## Mitigation
 
 Uncomment this rule in `app/proguard-rules.pro` and rebuild:

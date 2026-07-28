@@ -14,9 +14,19 @@ android {
         versionName = "1.0"
     }
 
+      signingConfigs {
+    getByName("debug") {
+      storeFile = rootProject.file("debug.keystore")
+      storePassword = "android"
+      keyAlias = "androiddebugkey"
+      keyPassword = "android"
+    }
+  }
+
     buildTypes {
         release {
             isMinifyEnabled = true
+                  signingConfig = signingConfigs.getByName("debug") // to be able to run release mode
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

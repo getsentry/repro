@@ -1,39 +1,45 @@
 package com.example.myapp;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.os.Bundle;
+import android.util.Log;
 import android.widget.TextView;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
-
 public final class MainActivity extends Activity {
+
+    private static final String TAG = "MainActivity";
+
+    @SuppressLint("SetTextI18n")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // The Intent extra is unknown to R8, so both Throwable classes remain reachable.
-        boolean diagnostic = getIntent().getBooleanExtra("diagnostic", false);
-        Throwable throwable = createThrowable(diagnostic);
+        final State loading = State.Loading.INSTANCE;
+        final State error = State.Error.INSTANCE;
+        final State success = new State.Success("Hello World");
 
-        String runtimeType = throwable.getClass().getName();
-        StringWriter stack = new StringWriter();
-        throwable.printStackTrace(new PrintWriter(stack));
-
-        TextView output = new TextView(this);
-        output.setText("Requested source type: "
-                + (diagnostic ? "DiagnosticTestException" : "ExampleNonFatal")
-                + "\nRuntime type: " + runtimeType
-                + "\n\n" + stack);
-        setContentView(output);
-        android.util.Log.e("Error", "It failed", throwable);
-    }
-
-    private static Throwable createThrowable(boolean diagnostic) {
-        String message = "example failure";
-        if (diagnostic) {
-            return new DiagnosticTestException(message);
+        try {
+            loading.goNuts();
+        } catch (Exception e) {
+            Log.d(TAG, "loading", e);
         }
-        return new ExampleNonFatal(message);
+        try {
+            error.goNuts();
+        } catch (Exception e) {
+            Log.d(TAG, "error", e);
+        }
+        try {
+            success.goNuts();
+        } catch (Exception e) {
+            Log.d(TAG, "success", e);
+        }
+        final TextView output = new TextView(this);
+        output.setPadding(72, 72, 72, 72);
+        output.setText(
+                "loading: " + loading.getClass() + "\n" +
+                "error: " + error.getClass() + "\n" +
+                "success: " + success.getClass());
+        setContentView(output);
     }
 }

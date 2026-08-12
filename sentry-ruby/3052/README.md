@@ -18,10 +18,10 @@ em-synchrony (1.0.6) lib/em-synchrony/thread.rb:56:in `resume'
 em-synchrony (1.0.6) lib/em-synchrony/thread.rb:56:in `block in unlock'
 ```
 
-The reproduction uses a controlled subclass of Sentry's real `HTTPTransport`.
-It requires `SENTRY_DSN`, sends the captured envelope to that DSN, and pauses
-the worker's request long enough to force the relevant thread/fiber
-interleaving. Use a test project/DSN because this sends a real event.
+The reproduction uses Sentry's default HTTP transport and requires a real
+`SENTRY_DSN`. A test event is queued behind a small background-worker barrier;
+the barrier only makes the executor interleaving deterministic and does not
+replace or wrap the transport.
 
 ## Steps to Reproduce
 
@@ -44,31 +44,28 @@ interleaving. Use a test project/DSN because this sends a real event.
    SENTRY_DSN='https://public@example.com/1' SENTRY_BACKGROUND_THREADS=0 bundle exec ruby repro.rb
    ```
 
-The script prints the endpoint, sends one real envelope, and reports whether
-the HTTP request completed. The reproduction deterministically holds the
-worker task open, then makes an EventMachine fiber acquire the executor's lock.
-On the tested runtime, the default-worker run logs the reported `FiberError`
-from the worker while it tries to return to the executor. The controlled HTTP
-transport sends the request to the supplied DSN after releasing the test gate;
-with different transport timing, the issue can prevent an event from being
-sent.
+On the default-worker run, the script should print `FiberError` stack traces
+from `em-synchrony` after `Forcing the worker/thread and EventMachine/fiber
+interleaving...`. The Sentry event is queued behind the barrier and should not
+be processed after the worker fails. The synchronous-worker comparison should
+complete without the worker-thread/fiber error.
+
+Use a test project/DSN because the script sends a real event when the default
+worker can reach the configured Sentry endpoint.
 
 ## Expected Behavior
 
 `Sentry.capture_exception` should dispatch the event through the background
-worker and the HTTP transport should send exactly one event without a
-`FiberError`.
+worker without raising or logging a `FiberError`.
 
 ## Actual Behavior
 
-In affected applications/runtimes, the background worker's executor uses the
-fiber-aware mutex from an incompatible thread/fiber context. In this script,
-`SENTRY_DSN` is required and the event is sent through the real HTTP transport.
-The worker can fail while updating executor state after the request gate is
-released. em-synchrony's `Mutex#unlock` schedules a fiber resume with
-`EM.next_tick`, producing the reported `FiberError: attempt to resume a
-transferring fiber`; depending on where the failure occurs in a real
-application, the event may be lost.
+The background worker's executor uses the fiber-aware mutex from an
+incompatible thread/fiber context. When the barrier is released while the
+EventMachine fiber holds the executor lock, the worker's executor bookkeeping
+calls em-synchrony's `Mutex#unlock`, which schedules an invalid fiber resume.
+This produces `FiberError` and can prevent the queued Sentry event from being
+sent.
 
 Set `SENTRY_BACKGROUND_THREADS=0` to compare the workaround described in the
 issue. For EventMachine applications that cannot block the reactor, a real

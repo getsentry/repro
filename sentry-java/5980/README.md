@@ -84,13 +84,41 @@ on every run):
 So on this hardware the instrumentation adds no measurable cost and does not starve the writer
 pool. Read the notes below before treating this reproduction as a negative result for the SDK.
 
+### SAGP configuration
+
+`app/build.gradle.kts` only sets `tracingInstrumentation.enabled`. That is enough for the
+`DATABASE` feature, because SAGP's defaults are `enabled = true` and
+`features = [DATABASE, FILE_IO, OKHTTP, COMPOSE]`
+([docs](https://docs.sentry.io/platforms/android/configuration/gradle/#tracing-instrumentation)),
+so nothing else has to be opted into. `-PsentryInstrumentation=false` flips `enabled` for the
+baseline build.
+
 ### What was verified
 
-- SAGP really rewrites the call: `dexdump` shows one `SentrySQLiteDriver;.create` call site inside
-  `androidx.room3.RoomDatabase$Builder.setDriver`.
-- A transaction is on the scope in every worker thread (the app logs
-  `writer worker parent span: true`), so `SentrySQLiteStatement` is recording spans rather than
-  short-circuiting.
+Both claims below were checked on the built APK, not inferred from the Gradle config:
+
+| Check | instrumentation on | instrumentation off |
+| --- | --- | --- |
+| `SentrySQLiteDriver.create` call sites in the dex | 1 | 0 |
+| `SentrySupportSQLiteOpenHelper.create` call sites | 1 | 0 |
+| `io.sentry.gradle-plugin-integrations` in the shipped manifest | `AppStartInstrumentation,DatabaseInstrumentation,FileIOInstrumentation,LogcatInstrumentation` | absent |
+
+```bash
+# dex call sites
+unzip -o -q app/build/outputs/apk/debug/app-debug.apk '*.dex' -d /tmp/dx
+$ANDROID_HOME/build-tools/36.0.0/dexdump -d /tmp/dx/*.dex | grep -c 'SentrySQLiteDriver;.create'
+
+# integrations reported to the SDK
+$ANDROID_HOME/build-tools/36.0.0/aapt2 dump xmltree \
+  --file AndroidManifest.xml app/build/outputs/apk/debug/app-debug.apk | grep -A1 gradle-plugin-integrations
+```
+
+The single `SentrySQLiteDriver.create` call site sits inside
+`androidx.room3.RoomDatabase$Builder.setDriver`, which is exactly the rewrite SAGP performs.
+
+A transaction is also on the scope in every worker thread (the app logs
+`writer worker parent span: true`), so `SentrySQLiteStatement` is recording spans rather than
+short-circuiting.
 
 ### Notes for whoever picks this up
 

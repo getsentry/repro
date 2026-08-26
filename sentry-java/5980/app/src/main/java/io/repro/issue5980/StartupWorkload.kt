@@ -1,4 +1,4 @@
-package io.sentry.repro.issue5980
+package io.repro.issue5980
 
 import android.content.Context
 import io.sentry.Sentry
@@ -27,6 +27,11 @@ class StartupWorkload(
   private val opsPerWorker: Int = 60,
   /** When false, the burst itself races Room's first open / schema creation, like a cold start. */
   private val warmUp: Boolean = false,
+  /** Lock/unlock cycles for the SAGP FILE_IO probe on Room's `.lck` file. */
+  private val lockCycles: Int = 200,
+  /** Rounds of Room's real, contended first-open path. */
+  private val raceRounds: Int = 20,
+  private val raceConcurrency: Int = 8,
 ) {
 
   suspend fun run(log: suspend (String) -> Unit): String {
@@ -37,7 +42,10 @@ class StartupWorkload(
       log(line)
     }
 
-    emit("SAGP tracing instrumentation: ${BuildConfig.SENTRY_INSTRUMENTATION}")
+    emit(
+      "SAGP tracing instrumentation: ${BuildConfig.SENTRY_INSTRUMENTATION} " +
+        "(features: ${BuildConfig.SENTRY_FEATURES})"
+    )
 
     val transaction =
       Sentry.startTransaction(
@@ -50,6 +58,23 @@ class StartupWorkload(
     val eventDb = Databases.event(context)
 
     emit("parent span on this thread: ${Sentry.getSpan() != null}")
+    emit("transaction on this thread: ${Sentry.getCurrentScopes().transaction != null}")
+
+    // 1. Does SAGP's FILE_IO instrumentation break Room's file lock? The probe mirrors
+    //    androidx.room3.concurrent.FileLock, so it gets the identical bytecode rewrite.
+    if (lockCycles > 0) {
+      withContext(Dispatchers.IO) {
+        FileLockProbe.run(context.getDatabasePath("probe.db").parentFile!!, lockCycles) { line ->
+          android.util.Log.i(TAG, line)
+          report.appendLine(line)
+        }
+      }
+    }
+
+    // 2. The same path through Room itself, under contention.
+    if (raceRounds > 0) {
+      FirstOpenRace(context, raceRounds, raceConcurrency).run { line -> emit(line) }
+    }
 
     if (warmUp) {
       val openMs = measureTimeMillis {
@@ -115,7 +140,9 @@ class StartupWorkload(
     transaction.finish()
 
     emit("")
-    emit("Check logcat for: 'Timed out attempting to acquire a writer connection.'")
+    // Deliberately not quoting Room's message verbatim, so that grepping logcat for it does not
+    // match this line.
+    emit("Now grep logcat for Room's writer-connection timeout message (see README).")
     return report.toString()
   }
 

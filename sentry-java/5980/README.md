@@ -34,11 +34,13 @@ SentrySQLiteDriver -> PragmaConfiguringDriver -> BundledSQLiteDriver
 
    ```bash
    ./gradlew :app:installDebug
-   adb shell pm clear io.sentry.repro.issue5980
+   adb shell pm clear io.repro.issue5980
    adb logcat -c
-   adb shell am start -n io.sentry.repro.issue5980/.MainActivity \
+   adb shell am start -n io.repro.issue5980/.MainActivity \
      --ei writers 16 --ei readers 16 --ei ops 200
-   adb logcat -d | grep -E "Repro5980|Timed out attempting"
+   adb logcat -d | grep -E "Repro5980"
+   # Room logs the pool timeout via printStackTrace, under the System.err tag:
+   adb logcat -d | grep "Timed out attempting to acquire a writer connection"
    ```
 
 2. Install and run the baseline, with the instrumentation disabled:
@@ -54,10 +56,14 @@ SentrySQLiteDriver -> PragmaConfiguringDriver -> BundledSQLiteDriver
 | Knob | Where | Default | Meaning |
 | --- | --- | --- | --- |
 | `-PsentryInstrumentation` | Gradle | `true` | SAGP bytecode instrumentation on/off |
+| `-PsentryFeatures` | Gradle | all four | comma-separated `InstrumentationFeature` names, e.g. `DATABASE` |
 | `--ei writers` | intent extra | `8` | concurrent coroutines that insert |
 | `--ei readers` | intent extra | `8` | concurrent coroutines that query |
 | `--ei ops` | intent extra | `60` | operations per worker |
 | `--ez warmup` | intent extra | `false` | when `false`, the burst races Room's first open |
+| `--ei lockCycles` | intent extra | `200` | lock/unlock cycles for the `FileLockProbe` |
+| `--ei raceRounds` | intent extra | `20` | rounds of Room's contended first open |
+| `--ei raceConcurrency` | intent extra | `8` | concurrent openers per round |
 
 The DSN is empty by default. `export SENTRY_DSN=...` before building to send the data to a real
 project. Without it the app falls back to `https://key@127.0.0.1/1`: the DSN must stay
@@ -78,8 +84,8 @@ on every run):
 
 | SAGP instrumentation | run 1 | run 2 | run 3 | pool timeouts |
 | --- | --- | --- | --- | --- |
-| on | 3914 ms | 4100 ms | 5049 ms | 0 |
-| off | 3924 ms | 4302 ms | 4984 ms | 0 |
+| on (all features) | 4461 ms | 5095 ms | 5062 ms | 0 |
+| off | 5041 ms | 4534 ms | 4114 ms | 0 |
 
 So on this hardware the instrumentation adds no measurable cost and does not starve the writer
 pool. Read the notes below before treating this reproduction as a negative result for the SDK.
@@ -120,6 +126,74 @@ A transaction is also on the scope in every worker thread (the app logs
 `writer worker parent span: true`), so `SentrySQLiteStatement` is recording spans rather than
 short-circuiting.
 
+### FILE_IO instrumentation on Room's lock file — tested, not the cause
+
+Room takes a multi-process file lock on the *first* open of a database
+(`BaseRoomConnectionManager.openLocked` builds an `ExclusiveMutex` with `useFileLock = true` while
+`isConfigured` is false). `androidx.room3.concurrent.FileLock.lock()` does:
+
+```kotlin
+lockChannel = FileOutputStream(lockFile).channel
+lockChannel?.lock()
+```
+
+SAGP's `FILE_IO` feature rewrites that constructor, and `dexdump` confirms it happens in the
+shipped APK, inside Room's own class:
+
+```
+0018: invoke-direct {v1, v0}, Ljava/io/FileOutputStream;.<init>:(Ljava/io/File;)V
+001b: invoke-static  {v1, v0}, Lio/sentry/instrumentation/file/SentryFileOutputStream$Factory;.create:(...)
+001f: invoke-virtual {v1}, Ljava/io/FileOutputStream;.getChannel:()Ljava/nio/channels/FileChannel;
+0029: invoke-virtual {v1}, Ljava/nio/channels/FileChannel;.lock:()Ljava/nio/channels/FileLock;
+```
+
+`SentryFileOutputStream` calls `super(getFileDescriptor(delegate))`, so **two `FileOutputStream`
+objects share one file descriptor**, the locking `FileChannel` hangs off the outer one, and
+`close()` closes the inner one. That is on Room's non-cancellable open path, so it is worth
+ruling out.
+
+`FileLockProbe` replicates Room's `FileLock` verbatim so it receives the identical rewrite, and
+`FirstOpenRace` drives Room's real locked open path under contention (each round builds a fresh
+`RoomDatabase`, which resets `isConfigured`, then has N coroutines hit it simultaneously).
+
+**Result: the lock is released correctly and the feature is not implicated.** Three runs per
+configuration, 500 lock/unlock cycles + 60 rounds x 32 concurrent openers + the write burst:
+
+| `-PsentryFeatures` | probe stream class | `OverlappingFileLockException` | first-open race, slowest round | write burst |
+| --- | --- | --- | --- | --- |
+| *(instrumentation off)* | `java.io.FileOutputStream` | 0 | 103 / 79 / 88 ms | 539 / 531 / 583 ms |
+| `DATABASE` | `java.io.FileOutputStream` | 0 | 123 / 146 / 151 ms | 715 / 750 / 718 ms |
+| `FILE_IO` | `SentryFileOutputStream` | 0 | 102 / 56 / 64 ms | 581 / 573 / 557 ms |
+| `DATABASE,FILE_IO` | `SentryFileOutputStream` | 0 | 159 / 165 / 191 ms | 731 / 788 / 779 ms |
+
+What this shows:
+
+- **The file lock is really released.** `OverlappingFileLockException` is the decisive signal: a
+  `FileLock` left in the JVM's lock table makes the *next* `lock()` on the same file fail
+  immediately, even though the OS-level lock is gone. Over 500 sequential cycles with the wrapper
+  active it never fired. `FileChannelImpl.implCloseChannel()` releases the lock table entries
+  before it calls `parent.close()`, so the double-stream layout does not break it.
+- **No file descriptor leak.** The `/proc/self/fd` delta across the probe is 7–9 at 300 cycles and
+  7–9 at 2000 cycles, i.e. flat rather than per-cycle — it is background noise from other threads.
+  `SentryFileOutputStream.close()` reaches `FileIOSpanManager.finish(delegate)`, which closes the
+  real stream.
+- **`FILE_IO` alone costs nothing here** — it is within noise of the uninstrumented baseline on
+  both metrics.
+- **The open-path cost comes from `DATABASE`**, ~60% on the first-open race. `DATABASE,FILE_IO` is
+  modestly above `DATABASE` alone (159–191 vs 123–151 ms), so the two are mildly additive on the
+  open path, but there is no pathological interaction: no hang, no lock leak, no failure.
+
+Zero failures in every configuration, so this does not explain the reported timeout.
+
+### Gotcha: app classes under `io.sentry.*` are never instrumented
+
+The app package is `io.repro.issue5980`, deliberately. SAGP skips any class whose name starts with
+`io.sentry` (`ClassContext.isSentryClass()`, with only `io.sentry.samples` and `io.sentry.mobile`
+exempted). The first version of this reproduction used `io.repro.issue5980` and the
+`FileLockProbe` was silently left uninstrumented — the dex showed a plain `FileOutputStream`
+constructor with no `Factory.create` after it. The SQLite results were unaffected, because that
+rewrite lands in the Room dependency rather than in app code.
+
 ### Notes for whoever picks this up
 
 1. **The overhead is bounded by `maxSpans`.** `DriverSpans.record` calls `parent.startChild(...)`,
@@ -154,7 +228,8 @@ short-circuiting.
 
 Room's pool logs the timeout with `printStackTrace` and then retries (`onTimeout` defaults to
 `LOG_TIMEOUT_EXCEPTION`), so the message shows up in logcat under the `System.err` tag rather than
-as a crash.
+as a crash. The app's own closing log line deliberately avoids quoting Room's message verbatim, so
+that grepping logcat for it cannot match the reproduction's own output.
 
 ## Environment
 

@@ -1,4 +1,4 @@
-package io.sentry.repro.issue5980
+package io.repro.issue5980
 
 import android.app.Application
 import io.sentry.android.core.SentryAndroid

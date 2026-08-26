@@ -1,4 +1,4 @@
-package io.sentry.repro.issue5980
+package io.repro.issue5980
 
 import android.content.Context
 import androidx.room3.Dao

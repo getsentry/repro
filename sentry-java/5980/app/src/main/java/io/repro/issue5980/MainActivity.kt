@@ -1,4 +1,4 @@
-package io.sentry.repro.issue5980
+package io.repro.issue5980
 
 import android.app.Activity
 import android.os.Bundle
@@ -22,7 +22,7 @@ class MainActivity : Activity() {
     output = TextView(this).apply { setPadding(24, 24, 24, 24) }
     setContentView(ScrollView(this).apply { addView(output) })
 
-    // adb shell am start -n io.sentry.repro.issue5980/.MainActivity \
+    // adb shell am start -n io.repro.issue5980/.MainActivity \
     //   --ei writers 8 --ei readers 8 --ei ops 60
     val workload =
       StartupWorkload(
@@ -31,6 +31,9 @@ class MainActivity : Activity() {
         readers = intent.getIntExtra("readers", 8),
         opsPerWorker = intent.getIntExtra("ops", 60),
         warmUp = intent.getBooleanExtra("warmup", false),
+        lockCycles = intent.getIntExtra("lockCycles", 200),
+        raceRounds = intent.getIntExtra("raceRounds", 20),
+        raceConcurrency = intent.getIntExtra("raceConcurrency", 8),
       )
 
     CoroutineScope(Dispatchers.Default).launch {

@@ -77,18 +77,24 @@ Room's writer connection is acquired and released normally. No pool timeout.
 
 ## Actual Behavior
 
-**The writer timeout did NOT reproduce here.** The harness runs, the instrumentation is confirmed
-active, but the writer pool never times out. Numbers from a Pixel-class emulator (API 36,
-16 writers x 200 inserts + 16 readers x 200 queries against two Room 3 databases, cold database
-on every run):
+**The writer timeout did NOT reproduce**, on either of two emulators — including an Android 12 /
+API 32 image chosen to match the report. The harness runs, the instrumentation is confirmed
+active, and the writer pool never times out. Roughly 40 runs on Android 12 produced zero
+occurrences of `Timed out attempting to acquire a writer connection`.
 
-| SAGP instrumentation | run 1 | run 2 | run 3 | pool timeouts |
-| --- | --- | --- | --- | --- |
-| on (all features) | 4461 ms | 5095 ms | 5062 ms | 0 |
-| off | 5041 ms | 4534 ms | 4114 ms | 0 |
+Write burst, 16 writers x 200 inserts + 16 readers x 200 queries against two Room 3 databases,
+cold database on every run:
 
-So on this hardware the instrumentation adds no measurable cost and does not starve the writer
-pool. Read the notes below before treating this reproduction as a negative result for the SDK.
+| Emulator | SAGP instrumentation | run 1 | run 2 | run 3 | pool timeouts |
+| --- | --- | --- | --- | --- | --- |
+| Android 12, API 32, arm64 | on (all features) | 2132 ms | 1808 ms | 1874 ms | 0 |
+| Android 12, API 32, arm64 | off | 1591 ms | 1328 ms | 1245 ms | 0 |
+| API 36, arm64 | on (all features) | 4461 ms | 5095 ms | 5062 ms | 0 |
+| API 36, arm64 | off | 5041 ms | 4534 ms | 4114 ms | 0 |
+
+On Android 12 the instrumentation costs a consistent ~40% on the burst; on API 36 the difference
+was inside the noise. Neither is anywhere near the factor needed to exhaust Room's 30 second pool
+timeout. Read the notes below before treating this reproduction as a negative result for the SDK.
 
 ### SAGP configuration
 
@@ -157,7 +163,18 @@ ruling out.
 `RoomDatabase`, which resets `isConfigured`, then has N coroutines hit it simultaneously).
 
 **Result: the lock is released correctly and the feature is not implicated.** Three runs per
-configuration, 500 lock/unlock cycles + 60 rounds x 32 concurrent openers + the write burst:
+configuration, 500 lock/unlock cycles + 60 rounds x 32 concurrent openers + the write burst.
+
+Android 12, API 32:
+
+| `-PsentryFeatures` | probe stream class | `OverlappingFileLockException` | first-open race, slowest round | write burst |
+| --- | --- | --- | --- | --- |
+| *(instrumentation off)* | `java.io.FileOutputStream` | 0 | 37 / 52 / 48 ms | 502 / 1039 / 622 ms |
+| `DATABASE` | `java.io.FileOutputStream` | 0 | 5266* / 85 / 46 ms | 1462 / 658 / 577 ms |
+| `FILE_IO` | `SentryFileOutputStream` | 0 | 50 / 37 / 21 ms | 463 / 505 / 349 ms |
+| `DATABASE,FILE_IO` | `SentryFileOutputStream` | 0 | 56 / 47 / 38 ms | 570 / 632 / 559 ms |
+
+API 36:
 
 | `-PsentryFeatures` | probe stream class | `OverlappingFileLockException` | first-open race, slowest round | write burst |
 | --- | --- | --- | --- | --- |
@@ -165,6 +182,12 @@ configuration, 500 lock/unlock cycles + 60 rounds x 32 concurrent openers + the 
 | `DATABASE` | `java.io.FileOutputStream` | 0 | 123 / 146 / 151 ms | 715 / 750 / 718 ms |
 | `FILE_IO` | `SentryFileOutputStream` | 0 | 102 / 56 / 64 ms | 581 / 573 / 557 ms |
 | `DATABASE,FILE_IO` | `SentryFileOutputStream` | 0 | 159 / 165 / 191 ms | 731 / 788 / 779 ms |
+
+\* That single 5266 ms round was chased and does not hold up: 8 repeats with identical parameters
+gave 37-47 ms, 10 repeats of a lighter configuration gave 40-154 ms, and 4 runs from a fresh
+install gave 43-68 ms. The same emulator also produced an unrelated 2531 ms burst outlier in a
+different configuration, so these are host scheduling artefacts rather than an instrumentation
+stall. It is left in the table because it was observed.
 
 What this shows:
 
@@ -237,4 +260,5 @@ that grepping logcat for it cannot match the reproduction's own output.
 - Sentry Android Gradle Plugin: 6.19.0
 - Room 3: 3.0.1, androidx.sqlite: 2.7.0 (`BundledSQLiteDriver`)
 - AGP 9.2.1, Gradle 9.6.1, Kotlin 2.3.21, JDK 17
-- Tested on an API 36 emulator; the report is from Xiaomi devices on Android 12
+- Tested on an Android 12 / API 32 arm64 emulator (matching the report's platform) and on an
+  API 36 arm64 emulator; the report is from Xiaomi devices on Android 12

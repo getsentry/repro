@@ -9,6 +9,9 @@ require "sentry-ruby"
 require "sentry-sidekiq"
 require "vernier"
 
+# SENTRY_FIX=1 applies the minimal fix in fix.rb.
+require_relative "fix" if ENV["SENTRY_FIX"]
+
 REDIS_URL = ENV.fetch("REDIS_URL", "redis://localhost:6399/0")
 
 Sidekiq.configure_client { |config| config.redis = { url: REDIS_URL } }

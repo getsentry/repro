@@ -134,10 +134,11 @@ Envelope items sent: transaction=2
 
 So with any Sidekiq concurrency > 1, Vernier profiling produces nothing.
 
-### The actual fix: stop using Vernier's singleton API
+### The minimal fix: `fix.rb` (8 lines of Ruby)
 
-The destructive behaviour lives entirely in Vernier's *module-level convenience API*.
-`Vernier::Collector` itself supports concurrent collectors just fine:
+The whole bug is Vernier's module-level API. `start_profile`/`stop_profile` share one
+process-global `@collector` and starting a second profile *stops and discards* the
+running one — but `Vernier::Collector` is perfectly happy to run concurrently:
 
 ```ruby
 a = Vernier::Collector.new(:wall, interval: 10_000); a.start
@@ -145,8 +146,44 @@ b = Vernier::Collector.new(:wall, interval: 10_000); b.start   # => works
 a.stop  # => valid Vernier::Result
 ```
 
-So the profiler can hold its own collector instead of driving the global one
-(`patches/per-collector.diff`, 4 changed lines against master):
+So give each thread its own collector. Sentry's `Profiler` is untouched — its logging
+and its `rescue RuntimeError` keep working as-is:
+
+```ruby
+module Vernier
+  def self.start_profile(mode: :wall, **collector_options)
+    Thread.current[:sentry_vernier_collector] = Collector.new(mode, collector_options).tap(&:start)
+  end
+
+  def self.stop_profile
+    Thread.current[:sentry_vernier_collector]&.stop
+  end
+end
+```
+
+`SENTRY_FIX=1` loads it in both entry points:
+
+| scenario | without | with `fix.rb` |
+| --- | --- | --- |
+| 5.21.0, 4 concurrent transactions | `2x RuntimeError: profile not started` | **no error, 4/4 profiles** |
+| 7.0.0, 4 concurrent transactions | 0/4 profiles | **4/4** |
+| 7.0.0 Sidekiq, 12 jobs @ concurrency 5 | 4/12 profiles | **12/12** |
+
+```bash
+SENTRY_FIX=1 SENTRY_VERSION=5.21.0 bundle exec ruby threads_repro.rb
+SENTRY_FIX=1 SENTRY_VERSION=7.0.0  ./run_sidekiq.sh
+```
+
+Note this is a *demonstration* — an app shouldn't monkeypatch a dependency's public
+API. It localises the defect precisely, and suggests the fix could equally land in
+Vernier (a thread-local or at least non-destructive singleton) rather than in Sentry.
+
+### The same change, upstream-shaped
+
+
+For sentry-ruby itself the equivalent is to hold the collector on the profiler
+(`patches/per-collector.diff`, 4 changed lines against master), which avoids touching
+Vernier's public API:
 
 ```ruby
 -@started = ::Vernier.start_profile(interval: @profiles_sample_interval)
@@ -157,15 +194,9 @@ So the profiler can hold its own collector instead of driving the global one
 +@result = @collector.stop
 ```
 
-Measured against `master` (7.0.0):
-
-| scenario | unpatched | per-collector patch |
-| --- | --- | --- |
-| 4 concurrent transactions | 0/4 profiles | **4/4** |
-| Sidekiq, 12 jobs @ concurrency 5 | 4/12 profiles | **12/12** |
-
-This removes the limitation rather than documenting it — every concurrent job gets
-profiled. Two things to resolve before shipping it:
+Measured against `master`, it matches `fix.rb`: 4/4 and 12/12. Either way the
+limitation is removed rather than documented — every concurrent job gets profiled.
+Two things to resolve before shipping:
 
 - **Upstream specs need rewriting**, and one crashes: they stub `::Vernier.start_profile`,
   so with real collectors the suite hits
@@ -237,7 +268,8 @@ expected contention path is reported as a failure.
 | `enqueue.rb` | pushes jobs onto the queue |
 | `run_sidekiq.sh` | boots Redis, enqueues, runs Sidekiq with concurrency 5, reports escaped exceptions and profile counts (`SENTRY_FIX=1` applies the fix) |
 | `run_matrix.sh` | runs `threads_repro.rb` across several sentry-ruby versions |
-| `patches/per-collector.diff` | the recommended fix against sentry-ruby master |
+| `fix.rb` | the minimal fix, 8 lines; load with `SENTRY_FIX=1` |
+| `patches/per-collector.diff` | the same change shaped as an upstream patch to sentry-ruby |
 | `Gemfile.master` | points at a local sentry-ruby checkout (`SENTRY_SRC=...`) so patches can be tested |
 | `leak_test.rb` | shows an abandoned transaction disables profiling on its Hub forever |
 | `leak_cross_thread.rb` | same, across threads - the case the singleton's destructiveness accidentally heals |

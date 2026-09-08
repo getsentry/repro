@@ -38,6 +38,9 @@ require "bundler/setup"
 require "sentry-ruby"
 require "vernier"
 
+# SENTRY_FIX=1 applies the minimal fix in fix.rb.
+require_relative "fix" if ENV["SENTRY_FIX"]
+
 # A DSN must be present for tracing (and therefore profiling) to be enabled at all.
 # Nothing is actually sent anywhere - this transport just counts envelope items.
 class CountingTransport < Sentry::Transport

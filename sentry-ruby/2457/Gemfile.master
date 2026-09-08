@@ -1,0 +1,10 @@
+source "https://rubygems.org"
+
+# Points at a local sentry-ruby checkout so a patch can be tested directly:
+#   SENTRY_SRC=/path/to/sentry-ruby BUNDLE_GEMFILE=Gemfile.master bundle install
+src = ENV.fetch("SENTRY_SRC", "/tmp/sentry-ruby-src")
+gem "sentry-ruby", path: "#{src}/sentry-ruby"
+gem "sentry-sidekiq", path: "#{src}/sentry-sidekiq"
+
+gem "sidekiq", "~> 7.1"
+gem "vernier", "~> 1.3"

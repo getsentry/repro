@@ -35,9 +35,6 @@ Sentry.init do |config|
   config.transport.transport_class = CountingTransport unless ENV["SENTRY_DSN"]
 end
 
-# SENTRY_FIX=1 applies the ownership guard sketched in proposed_fix.rb.
-require_relative "proposed_fix" if ENV["SENTRY_FIX"]
-
 at_exit do
   counts = CountingTransport::COUNTS
   warn "### envelope items: #{counts.sort.map { |k, v| "#{k}=#{v}" }.join(", ")}" unless counts.empty?

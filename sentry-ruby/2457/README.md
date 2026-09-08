@@ -134,38 +134,68 @@ Envelope items sent: transaction=2
 
 So with any Sidekiq concurrency > 1, Vernier profiling produces nothing.
 
-`proposed_fix.rb` sketches a fix: a process-wide ownership guard on
-`Sentry::Vernier::Profiler`, so a losing thread **never calls `::Vernier.start_profile`
-at all** — that call is precisely what discards the winner's collector. Exactly one
-profiler holds Vernier at a time and actually gets its result back.
+### The actual fix: stop using Vernier's singleton API
 
-```bash
-bundle exec ruby threads_repro.rb   # 0/4 transactions carry a profile
-bundle exec ruby fix_demo.rb        # 1/4 transactions carry a profile
+The destructive behaviour lives entirely in Vernier's *module-level convenience API*.
+`Vernier::Collector` itself supports concurrent collectors just fine:
 
-./run_sidekiq.sh                    # 12 jobs, concurrency 5 -> profile=2,  transaction=12
-SENTRY_FIX=1 ./run_sidekiq.sh       # 12 jobs, concurrency 5 -> profile=7,  transaction=12
+```ruby
+a = Vernier::Collector.new(:wall, interval: 10_000); a.start
+b = Vernier::Collector.new(:wall, interval: 10_000); b.start   # => works
+a.stop  # => valid Vernier::Result
 ```
 
-That is the "profile one thread at a time" behaviour the issue thread settled on,
-and it holds across sequential jobs (ownership is released in an `ensure`).
+So the profiler can hold its own collector instead of driving the global one
+(`patches/per-collector.diff`, 4 changed lines against master):
 
-Caveats for whoever picks this up:
+```ruby
+-@started = ::Vernier.start_profile(interval: @profiles_sample_interval)
++@collector = ::Vernier::Collector.new(:wall, interval: @profiles_sample_interval)
++@started = @collector.start
 
-- **Leaked ownership.** If a transaction is started but never finished, `stop` never
-  runs and profiling is dead for the rest of the process. Today's behaviour
-  self-heals destructively — the next `start_profile` stops the stale collector. A
-  guard probably wants a takeover after `max_profile_duration` rather than waiting
-  forever.
-- **Non-SDK owners.** Sidekiq 8 profiles with Vernier natively, and rack-mini-profiler
-  / a manual `Vernier.profile` block can hold the collector too. Sentry can't see
-  those (Vernier exposes no public "is a profile running?" accessor — only the private
-  `Vernier.@collector`), so the `rescue RuntimeError` has to stay regardless. Note
-  Sentry's `start_profile` *also* kills an external collector when it wins the race.
-- **Alternative design.** Vernier's `:wall` mode already samples every thread in the
-  process. One long-lived collector, sliced per transaction by time window and thread
-  id, would profile all concurrent jobs instead of one — much closer to what users
-  expect here, but a substantially bigger change.
+-@result = ::Vernier.stop_profile
++@result = @collector.stop
+```
+
+Measured against `master` (7.0.0):
+
+| scenario | unpatched | per-collector patch |
+| --- | --- | --- |
+| 4 concurrent transactions | 0/4 profiles | **4/4** |
+| Sidekiq, 12 jobs @ concurrency 5 | 4/12 profiles | **12/12** |
+
+This removes the limitation rather than documenting it — every concurrent job gets
+profiled. Two things to resolve before shipping it:
+
+- **Upstream specs need rewriting**, and one crashes: they stub `::Vernier.start_profile`,
+  so with real collectors the suite hits
+  `libc++abi: terminating due to uncaught exception ... mutex lock failed: Invalid argument`.
+  Isolated probes did *not* reproduce it (100 sequential start/stops, 20 leaked
+  collectors, and double-`stop` — which raises a clean `RuntimeError: collector not
+  running` — all survive), so the likely suspect is a *running* collector being
+  garbage-collected. Worth confirming with @jhawthorn.
+- **Overhead** of N concurrent wall-mode collectors in one process is unmeasured. Each
+  samples every thread, so a Sidekiq process at concurrency 25 would run 25 collectors
+  all sampling 25+ threads. That may well be the reason to keep a cap.
+
+### The smaller alternatives, and why they are worse
+
+Both keep the singleton API and just stop the loser from calling it:
+
+- **`Mutex#try_lock` held across start..stop** (9 lines) — breaks 5 upstream specs. The
+  lock leaks whenever `start` succeeds and `stop` never runs, permanently disabling
+  profiling for the process.
+- **Check `Vernier.@collector` under a short lock** (12 lines) — upstream specs stay
+  green and it gets 1/4, but it reads a private ivar, and it removes today's accidental
+  self-healing: after an abandoned transaction on another thread, later transactions go
+  from 2/3 profiles to **0/3** (`leak_cross_thread.rb`). A regression.
+
+Note there is already a guard upstream, added by #2528 — `Hub#profiler_running?`, backed
+by a per-Hub `@current_profiler` hash. It does not help here because
+`Sentry.clone_hub_to_current_thread` gives every Sidekiq worker thread its own Hub, so
+N threads means N hubs each happily starting a profiler against one global collector.
+That hash also leaks: an abandoned transaction disables profiling on its thread forever
+(`leak_test.rb` — 0/3 on master, unpatched).
 
 **2. The friendly log branches are dead code (string-case mismatch).**
 
@@ -207,5 +237,7 @@ expected contention path is reported as a failure.
 | `enqueue.rb` | pushes jobs onto the queue |
 | `run_sidekiq.sh` | boots Redis, enqueues, runs Sidekiq with concurrency 5, reports escaped exceptions and profile counts (`SENTRY_FIX=1` applies the fix) |
 | `run_matrix.sh` | runs `threads_repro.rb` across several sentry-ruby versions |
-| `proposed_fix.rb` | sketch of an ownership guard so one profiler at a time actually keeps its result |
-| `fix_demo.rb` | `threads_repro.rb` with `proposed_fix.rb` applied |
+| `patches/per-collector.diff` | the recommended fix against sentry-ruby master |
+| `Gemfile.master` | points at a local sentry-ruby checkout (`SENTRY_SRC=...`) so patches can be tested |
+| `leak_test.rb` | shows an abandoned transaction disables profiling on its Hub forever |
+| `leak_cross_thread.rb` | same, across threads - the case the singleton's destructiveness accidentally heals |

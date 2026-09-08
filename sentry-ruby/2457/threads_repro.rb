@@ -58,7 +58,11 @@ Sentry.init do |config|
   config.profiles_sample_rate = 1.0
   config.background_worker_threads = 0
   config.transport.transport_class = CountingTransport unless ENV["SENTRY_DSN"]
-  config.debug = true if ENV["SENTRY_LOG"]
+  if ENV["SENTRY_LOG"]
+    config.debug = true
+    # `debug = true` alone is not enough on 7.x - the SDK logger level must be lowered too.
+    config.sdk_logger.level = ::Logger::DEBUG if config.respond_to?(:sdk_logger)
+  end
 end
 
 puts "sentry-ruby #{Sentry::VERSION} | vernier #{Vernier::VERSION} | ruby #{RUBY_VERSION}"

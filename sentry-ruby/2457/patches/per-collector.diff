@@ -1,0 +1,26 @@
+diff --git a/sentry-ruby/lib/sentry/vernier/profiler.rb b/sentry-ruby/lib/sentry/vernier/profiler.rb
+index 5047119f..c6b6dcef 100644
+--- a/sentry-ruby/lib/sentry/vernier/profiler.rb
++++ b/sentry-ruby/lib/sentry/vernier/profiler.rb
+@@ -58,7 +58,11 @@ module Sentry
+         return unless @sampled
+         return if @started
+ 
+-        @started = ::Vernier.start_profile(interval: @profiles_sample_interval)
++        # Use a per-transaction Collector rather than ::Vernier.start_profile, whose
++        # module-level singleton stops and discards a running profile before raising.
++        # Vernier supports concurrent collectors; the singleton API does not.
++        @collector = ::Vernier::Collector.new(:wall, interval: @profiles_sample_interval)
++        @started = @collector.start
+ 
+         log("Started")
+ 
+@@ -76,7 +80,7 @@ module Sentry
+         return unless @sampled
+         return unless @started
+ 
+-        @result = ::Vernier.stop_profile
++        @result = @collector.stop
+         @started = false
+ 
+         log("Stopped")

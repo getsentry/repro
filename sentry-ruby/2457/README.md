@@ -134,6 +134,39 @@ Envelope items sent: transaction=2
 
 So with any Sidekiq concurrency > 1, Vernier profiling produces nothing.
 
+`proposed_fix.rb` sketches a fix: a process-wide ownership guard on
+`Sentry::Vernier::Profiler`, so a losing thread **never calls `::Vernier.start_profile`
+at all** — that call is precisely what discards the winner's collector. Exactly one
+profiler holds Vernier at a time and actually gets its result back.
+
+```bash
+bundle exec ruby threads_repro.rb   # 0/4 transactions carry a profile
+bundle exec ruby fix_demo.rb        # 1/4 transactions carry a profile
+
+./run_sidekiq.sh                    # 12 jobs, concurrency 5 -> profile=2,  transaction=12
+SENTRY_FIX=1 ./run_sidekiq.sh       # 12 jobs, concurrency 5 -> profile=7,  transaction=12
+```
+
+That is the "profile one thread at a time" behaviour the issue thread settled on,
+and it holds across sequential jobs (ownership is released in an `ensure`).
+
+Caveats for whoever picks this up:
+
+- **Leaked ownership.** If a transaction is started but never finished, `stop` never
+  runs and profiling is dead for the rest of the process. Today's behaviour
+  self-heals destructively — the next `start_profile` stops the stale collector. A
+  guard probably wants a takeover after `max_profile_duration` rather than waiting
+  forever.
+- **Non-SDK owners.** Sidekiq 8 profiles with Vernier natively, and rack-mini-profiler
+  / a manual `Vernier.profile` block can hold the collector too. Sentry can't see
+  those (Vernier exposes no public "is a profile running?" accessor — only the private
+  `Vernier.@collector`), so the `rescue RuntimeError` has to stay regardless. Note
+  Sentry's `start_profile` *also* kills an external collector when it wins the race.
+- **Alternative design.** Vernier's `:wall` mode already samples every thread in the
+  process. One long-lived collector, sliced per transaction by time window and thread
+  id, would profile all concurrent jobs instead of one — much closer to what users
+  expect here, but a substantially bigger change.
+
 **2. The friendly log branches are dead code (string-case mismatch).**
 
 [`profiler.rb`](https://github.com/getsentry/sentry-ruby/blob/master/sentry-ruby/lib/sentry/vernier/profiler.rb)
@@ -172,5 +205,7 @@ expected contention path is reported as a failure.
 | `threads_repro.rb` | minimal repro, no Redis; replays the middleware's start/finish sequence on N threads |
 | `sidekiq_app.rb` | Sentry + Sidekiq setup and the CPU-burning job |
 | `enqueue.rb` | pushes jobs onto the queue |
-| `run_sidekiq.sh` | boots Redis, enqueues, runs Sidekiq with concurrency 5, reports escaped exceptions |
+| `run_sidekiq.sh` | boots Redis, enqueues, runs Sidekiq with concurrency 5, reports escaped exceptions and profile counts (`SENTRY_FIX=1` applies the fix) |
 | `run_matrix.sh` | runs `threads_repro.rb` across several sentry-ruby versions |
+| `proposed_fix.rb` | sketch of an ownership guard so one profiler at a time actually keeps its result |
+| `fix_demo.rb` | `threads_repro.rb` with `proposed_fix.rb` applied |

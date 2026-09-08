@@ -34,6 +34,7 @@ else
   echo "=== No exceptions - profiler contention was handled gracefully ==="
   status=0
 fi
+grep -h "### envelope items" "$out" || true
 echo
 echo "(full sidekiq log: $out)"
 exit $status

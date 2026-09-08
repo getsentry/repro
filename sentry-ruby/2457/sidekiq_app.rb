@@ -16,8 +16,15 @@ Sidekiq.configure_server { |config| config.redis = { url: REDIS_URL } }
 
 # Nothing needs to reach Sentry for the repro; a DSN just has to be present so
 # that tracing (and therefore profiling) is enabled.
-class DropEverythingTransport < Sentry::Transport
-  def send_envelope(_envelope); end
+class CountingTransport < Sentry::Transport
+  COUNTS = Hash.new(0)
+  MUTEX = Mutex.new
+
+  def send_envelope(envelope)
+    MUTEX.synchronize do
+      envelope.items.each { |item| COUNTS[item.headers[:type].to_s] += 1 }
+    end
+  end
 end
 
 Sentry.init do |config|
@@ -25,7 +32,15 @@ Sentry.init do |config|
   config.profiler_class = Sentry::Vernier::Profiler
   config.traces_sample_rate = 1.0
   config.profiles_sample_rate = 1.0
-  config.transport.transport_class = DropEverythingTransport unless ENV["SENTRY_DSN"]
+  config.transport.transport_class = CountingTransport unless ENV["SENTRY_DSN"]
+end
+
+# SENTRY_FIX=1 applies the ownership guard sketched in proposed_fix.rb.
+require_relative "proposed_fix" if ENV["SENTRY_FIX"]
+
+at_exit do
+  counts = CountingTransport::COUNTS
+  warn "### envelope items: #{counts.sort.map { |k, v| "#{k}=#{v}" }.join(", ")}" unless counts.empty?
 end
 
 Sidekiq.configure_server do |config|

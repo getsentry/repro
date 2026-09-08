@@ -1,0 +1,14 @@
+# frozen_string_literal: true
+
+source "https://rubygems.org"
+
+# Flip between the broken version from the issue report and a current one:
+#   SENTRY_VERSION=5.21.0 bundle install   # reproduces RuntimeError: profile not started
+#   SENTRY_VERSION=7.0.0  bundle install   # fixed (errors are swallowed + logged)
+sentry_version = ENV.fetch("SENTRY_VERSION", "5.21.0")
+
+gem "sentry-ruby", sentry_version
+gem "sentry-sidekiq", sentry_version
+
+gem "sidekiq", "~> 7.1"
+gem "vernier", "~> 1.3"

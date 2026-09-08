@@ -1,0 +1,275 @@
+# Reproduction for sentry-ruby#2457
+
+**Issue:** https://github.com/getsentry/sentry-ruby/issues/2457
+
+## Description
+
+`RuntimeError: profile not started` is raised out of Sidekiq workers when Vernier
+profiling (`config.profiler_class = Sentry::Vernier::Profiler`) is enabled and more
+than one job runs concurrently in the same process.
+
+**Status: the crash is fixed** (since 5.22.0 / 5.23.0 — see the matrix below), but on
+current sentry-ruby the underlying limitation still means **no profiles at all are
+produced** when Sidekiq runs more than one worker thread.
+
+### Root cause
+
+Vernier's profiler is a global singleton. From
+[`vernier/lib/vernier.rb`](https://github.com/jhawthorn/vernier/blob/main/lib/vernier.rb):
+
+```ruby
+def self.start_profile(mode: :wall, **collector_options)
+  if @collector
+    @collector.stop          # <- stops whoever was already profiling
+    @collector = nil
+    raise "profile already started, stopping..."
+  end
+  ...
+end
+
+def self.stop_profile
+  raise "profile not started" unless @collector
+  ...
+end
+```
+
+With two Sidekiq worker threads:
+
+| step | thread A | thread B |
+| --- | --- | --- |
+| 1 | `Vernier.start_profile` → `@collector = A`, Sentry sets `@started = true` | |
+| 2 | | `Vernier.start_profile` → **stops A's collector**, `@collector = nil`, raises `"profile already started, stopping..."` |
+| 3 | `Vernier.stop_profile` → `@collector` is `nil` → raises **`"profile not started"`** | |
+
+On 5.21.0 `Sentry::Vernier::Profiler#stop` had no `rescue`, so that `RuntimeError`
+escaped `transaction.finish` and propagated out of
+[`SentryContextServerMiddleware#finish_transaction`](https://github.com/getsentry/sentry-ruby/blob/master/sentry-sidekiq/lib/sentry/sidekiq/sentry_context_middleware.rb)
+— exactly the error in the report.
+
+## Steps to Reproduce
+
+Requires Ruby 3.3 (`.ruby-version` pins 3.3.6) and, for the Sidekiq variant,
+`redis-server` on `$PATH`. No Sentry DSN is needed — a dummy DSN is used and a no-op
+transport drops every envelope. To send to a real project instead,
+`export SENTRY_DSN=<your dsn>`.
+
+### 1. Minimal variant (threads only, no Redis)
+
+Mirrors what the Sidekiq server middleware does, without Sidekiq:
+
+```bash
+SENTRY_VERSION=5.21.0 bundle install
+SENTRY_VERSION=5.21.0 bundle exec ruby threads_repro.rb
+```
+
+```
+sentry-ruby 5.21.0 | vernier 1.11.0 | ruby 3.3.6
+thread 1: ok
+thread 3: ok
+thread 0: RuntimeError: profile not started
+thread 2: RuntimeError: profile not started
+
+REPRODUCED: 2/4 transactions raised while finishing:
+  2x RuntimeError: profile not started
+```
+
+Knobs: `THREADS=4` (default), `SENTRY_LOG=1` for the profiler's debug log.
+
+### 2. Sidekiq variant (real Sidekiq + Redis)
+
+Boots a throwaway Redis on port 6399, enqueues 12 jobs, runs Sidekiq with concurrency 5:
+
+```bash
+SENTRY_VERSION=5.21.0 bundle install
+SENTRY_VERSION=5.21.0 ./run_sidekiq.sh
+```
+
+```
+=== REPRODUCED - exceptions escaped the Sentry Sidekiq middleware ===
+   3 !!! REPRODUCED - job raised RuntimeError: profile not started
+```
+
+### 3. Version matrix
+
+```bash
+./run_matrix.sh                      # 5.21.0 5.22.0 5.23.0 7.0.0
+VERSIONS="5.21.0 7.0.0" ./run_matrix.sh
+```
+
+## Expected Behavior
+
+No errors raised out of workers; profile samples from workers visible in Sentry.
+
+## Actual Behavior
+
+| sentry-ruby | result |
+| --- | --- |
+| **5.21.0** (reported) | `RuntimeError: profile not started` escapes the job |
+| **5.22.0** | crash remains, different error: `NoMethodError: undefined method '_stack_table' for nil` (`stop` now rescues, but `@result` is `nil` and `to_hash` still builds output) |
+| **5.23.0 – 7.0.0** | no exception; **0 of 4** concurrent transactions carry a profile |
+
+Both crashes are fixed:
+
+- [#2429](https://github.com/getsentry/sentry-ruby/pull/2429) "Fix issues with stopping Vernier" → first released in **5.22.0** (adds `rescue RuntimeError` to `Profiler#stop`)
+- [#2528](https://github.com/getsentry/sentry-ruby/pull/2528) "Prevent starting Vernier in nested transactions" → first released in **5.23.0** (adds `return EMPTY_RESULT unless result`)
+
+### Two things still worth noting on 7.0.0
+
+**1. Concurrency yields zero profiles, not "one at a time".**
+
+The discussion on the issue settled on "it is fine to profile only one thread at a
+time and document that limitation". In practice it is worse than that: the loser's
+`start_profile` *stops the winner's collector* before raising, so the winner's
+`stop_profile` then fails too and its result is discarded. Nobody gets a profile.
+
+```
+$ THREADS=1 bundle exec ruby threads_repro.rb
+Envelope items sent: profile=1, transaction=1
+1/1 transactions carry a profile.
+
+$ THREADS=2 bundle exec ruby threads_repro.rb
+Envelope items sent: transaction=2
+0/2 transactions carry a profile.
+```
+
+So with any Sidekiq concurrency > 1, Vernier profiling produces nothing.
+
+### The minimal fix: `fix.rb` (8 lines of Ruby)
+
+The whole bug is Vernier's module-level API. `start_profile`/`stop_profile` share one
+process-global `@collector` and starting a second profile *stops and discards* the
+running one — but `Vernier::Collector` is perfectly happy to run concurrently:
+
+```ruby
+a = Vernier::Collector.new(:wall, interval: 10_000); a.start
+b = Vernier::Collector.new(:wall, interval: 10_000); b.start   # => works
+a.stop  # => valid Vernier::Result
+```
+
+So give each thread its own collector. Sentry's `Profiler` is untouched — its logging
+and its `rescue RuntimeError` keep working as-is:
+
+```ruby
+module Vernier
+  def self.start_profile(mode: :wall, **collector_options)
+    Thread.current[:sentry_vernier_collector] = Collector.new(mode, collector_options).tap(&:start)
+  end
+
+  def self.stop_profile
+    Thread.current[:sentry_vernier_collector]&.stop
+  end
+end
+```
+
+`SENTRY_FIX=1` loads it in both entry points:
+
+| scenario | without | with `fix.rb` |
+| --- | --- | --- |
+| 5.21.0, 4 concurrent transactions | `2x RuntimeError: profile not started` | **no error, 4/4 profiles** |
+| 7.0.0, 4 concurrent transactions | 0/4 profiles | **4/4** |
+| 7.0.0 Sidekiq, 12 jobs @ concurrency 5 | 4/12 profiles | **12/12** |
+
+```bash
+SENTRY_FIX=1 SENTRY_VERSION=5.21.0 bundle exec ruby threads_repro.rb
+SENTRY_FIX=1 SENTRY_VERSION=7.0.0  ./run_sidekiq.sh
+```
+
+Note this is a *demonstration* — an app shouldn't monkeypatch a dependency's public
+API. It localises the defect precisely, and suggests the fix could equally land in
+Vernier (a thread-local or at least non-destructive singleton) rather than in Sentry.
+
+### The same change, upstream-shaped
+
+
+For sentry-ruby itself the equivalent is to hold the collector on the profiler
+(`patches/per-collector.diff`, 4 changed lines against master), which avoids touching
+Vernier's public API:
+
+```ruby
+-@started = ::Vernier.start_profile(interval: @profiles_sample_interval)
++@collector = ::Vernier::Collector.new(:wall, interval: @profiles_sample_interval)
++@started = @collector.start
+
+-@result = ::Vernier.stop_profile
++@result = @collector.stop
+```
+
+Measured against `master`, it matches `fix.rb`: 4/4 and 12/12. Either way the
+limitation is removed rather than documented — every concurrent job gets profiled.
+Two things to resolve before shipping:
+
+- **Upstream specs need rewriting**, and one crashes: they stub `::Vernier.start_profile`,
+  so with real collectors the suite hits
+  `libc++abi: terminating due to uncaught exception ... mutex lock failed: Invalid argument`.
+  Isolated probes did *not* reproduce it (100 sequential start/stops, 20 leaked
+  collectors, and double-`stop` — which raises a clean `RuntimeError: collector not
+  running` — all survive), so the likely suspect is a *running* collector being
+  garbage-collected. Worth confirming with @jhawthorn.
+- **Overhead** of N concurrent wall-mode collectors in one process is unmeasured. Each
+  samples every thread, so a Sidekiq process at concurrency 25 would run 25 collectors
+  all sampling 25+ threads. That may well be the reason to keep a cap.
+
+### The smaller alternatives, and why they are worse
+
+Both keep the singleton API and just stop the loser from calling it:
+
+- **`Mutex#try_lock` held across start..stop** (9 lines) — breaks 5 upstream specs. The
+  lock leaks whenever `start` succeeds and `stop` never runs, permanently disabling
+  profiling for the process.
+- **Check `Vernier.@collector` under a short lock** (12 lines) — upstream specs stay
+  green and it gets 1/4, but it reads a private ivar, and it removes today's accidental
+  self-healing: after an abandoned transaction on another thread, later transactions go
+  from 2/3 profiles to **0/3** (`leak_cross_thread.rb`). A regression.
+
+Note there is already a guard upstream, added by #2528 — `Hub#profiler_running?`, backed
+by a per-Hub `@current_profiler` hash. It does not help here because
+`Sentry.clone_hub_to_current_thread` gives every Sidekiq worker thread its own Hub, so
+N threads means N hubs each happily starting a profiler against one global collector.
+That hash also leaks: an abandoned transaction disables profiling on its thread forever
+(`leak_test.rb` — 0/3 on master, unpatched).
+
+**2. The friendly log branches are dead code (string-case mismatch).**
+
+[`profiler.rb`](https://github.com/getsentry/sentry-ruby/blob/master/sentry-ruby/lib/sentry/vernier/profiler.rb)
+matches on a capital `P`:
+
+```ruby
+if e.message.include?("Profile already started")   # Vernier raises "profile already started, stopping..."
+if e.message.include?("Profile not started")       # Vernier raises "profile not started"
+```
+
+Vernier's messages are lowercase, so the intended "Not started since running
+elsewhere" / "Not stopped since not started" branches never run. Observed with
+`SENTRY_LOG=1` on 7.0.0:
+
+```
+[Profiler::Vernier] Started
+[Profiler::Vernier] Failed to start: profile already started, stopping...
+[Profiler::Vernier] Failed to stop Vernier: profile not started
+```
+
+Cosmetic (both are `debug`-level and the exception is swallowed either way), but the
+expected contention path is reported as a failure.
+
+## Environment
+
+- Ruby: 3.3.6 (issue reported on 3.3.4)
+- sentry-ruby / sentry-sidekiq: 5.21.0 (reported), also tested 5.22.0, 5.23.0, 7.0.0
+- vernier: 1.11.0 (issue reported on 1.3.1)
+- sidekiq: 7.3.10 (issue reported on 7.1.6)
+- OS: macOS (darwin arm64)
+
+## Files
+
+| file | purpose |
+| --- | --- |
+| `threads_repro.rb` | minimal repro, no Redis; replays the middleware's start/finish sequence on N threads |
+| `sidekiq_app.rb` | Sentry + Sidekiq setup and the CPU-burning job |
+| `enqueue.rb` | pushes jobs onto the queue |
+| `run_sidekiq.sh` | boots Redis, enqueues, runs Sidekiq with concurrency 5, reports escaped exceptions and profile counts (`SENTRY_FIX=1` applies the fix) |
+| `run_matrix.sh` | runs `threads_repro.rb` across several sentry-ruby versions |
+| `fix.rb` | the minimal fix, 8 lines; load with `SENTRY_FIX=1` |
+| `patches/per-collector.diff` | the same change shaped as an upstream patch to sentry-ruby |
+| `Gemfile.master` | points at a local sentry-ruby checkout (`SENTRY_SRC=...`) so patches can be tested |
+| `leak_test.rb` | shows an abandoned transaction disables profiling on its Hub forever |
+| `leak_cross_thread.rb` | same, across threads - the case the singleton's destructiveness accidentally heals |

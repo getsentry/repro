@@ -155,11 +155,31 @@ Before posting the github response on the issue, ask for permission (`AskUserQue
 Comment on the original GitHub issue with a link to the PR:
 
 ```bash
-gh issue comment <issue-number> --repo <owner>/<repo> --body "I've created a reproduction for this issue: [PR-URL]
+# Attribute the comment to the active coding harness and model. Support both
+# pi and Claude Code, while allowing explicit overrides for other harnesses.
+if [ -n "${REPRO_HARNESS:-}" ]; then
+  harness="$REPRO_HARNESS"
+  model="${REPRO_MODEL:-unknown model}"
+elif [ -n "${PI_MODEL:-}" ] || [ "${PI_CODING_AGENT:-}" = "true" ]; then
+  harness="${PI_HARNESS:-pi}"
+  model="${PI_MODEL:-unknown model}"
+elif [ -n "${CLAUDECODE:-}" ] || [ -n "${CLAUDE_CODE_ENTRYPOINT:-}" ] || [ -n "${CLAUDE_MODEL:-}" ] || [ -n "${ANTHROPIC_MODEL:-}" ]; then
+  harness="${CLAUDE_HARNESS:-Claude Code}"
+  model="${CLAUDE_MODEL:-${ANTHROPIC_MODEL:-unknown model}}"
+else
+  harness="unknown harness"
+  model="unknown model"
+fi
+
+comment_body=$(cat <<EOF
+I've created a reproduction for this issue: [PR-URL]
 
 You can run it by cloning the repo and following the instructions in the README.
 
-🤖 Generated with [Claude Code](https://claude.ai/code)"
+🤖 Generated with ${harness} using ${model}
+EOF
+)
+gh issue comment <issue-number> --repo <owner>/<repo> --body "$comment_body"
 ```
 
 ## Error Handling

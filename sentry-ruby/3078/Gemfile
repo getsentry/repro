@@ -1,0 +1,4 @@
+source "https://rubygems.org"
+
+gem "faraday", "1.10.6"
+gem "sentry-ruby", "7.0.0"

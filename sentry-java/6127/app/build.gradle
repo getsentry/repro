@@ -1,0 +1,58 @@
+plugins {
+    id 'com.android.application'
+    id 'io.sentry.android.gradle'
+}
+
+android {
+    namespace 'io.sentry.repro'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'io.sentry.repro'
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+        buildConfigField 'String', 'SENTRY_DSN', "\"${System.getenv('SENTRY_DSN') ?: ''}\""
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // debug keystore so the release APK is installable without extra setup
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+sentry {
+    // no upload in the repro
+    autoUploadProguardMapping = false
+    uploadNativeSymbols = false
+    includeSourceContext = false
+    telemetry = false
+
+    autoInstallation {
+        enabled = true
+        sentryVersion = '8.53.0'
+    }
+
+    tracingInstrumentation {
+        enabled = true
+        features = [io.sentry.android.gradle.extensions.InstrumentationFeature.OKHTTP] as Set
+    }
+}
+
+dependencies {
+    implementation 'com.squareup.okhttp3:okhttp:5.3.2'
+}

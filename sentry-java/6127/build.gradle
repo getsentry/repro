@@ -1,0 +1,4 @@
+plugins {
+    id 'com.android.application' version '8.13.2' apply false
+    id 'io.sentry.android.gradle' version '6.23.0' apply false
+}

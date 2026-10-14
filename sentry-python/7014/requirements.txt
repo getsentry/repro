@@ -1,0 +1,4 @@
+# Versions from the failing CI env py3.10-litellm-v1.83.14 (see tox.ini in getsentry/sentry-python)
+sentry-sdk==2.72.0
+filelock==3.32.4
+coverage==7.16.2

@@ -1,0 +1,16 @@
+# frozen_string_literal: true
+
+source "https://rubygems.org"
+
+# Defaults to the latest release. The issue was reported on 6.7.0:
+#   SENTRY_VERSION=6.7.0 bundle install
+# 5.x used Random.rand per transaction, so it still shares one trace_id but
+# sampling varies per job:
+#   SENTRY_VERSION=5.26.0 bundle install
+sentry_version = ENV.fetch("SENTRY_VERSION", "7.1.0")
+
+gem "sentry-ruby", sentry_version
+gem "sentry-sidekiq", sentry_version
+
+gem "sidekiq", "~> 8.0"
+gem "sidekiq-scheduler", "~> 6.0"

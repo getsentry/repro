@@ -1,0 +1,5 @@
+source "https://rubygems.org"
+
+# Runs the reproduction against a local sentry-ruby checkout, e.g. a fix branch:
+#   SENTRY_RUBY_PATH=/path/to/sentry-ruby/sentry-ruby BUNDLE_GEMFILE=Gemfile.patched bundle exec ruby repro.rb
+gem "sentry-ruby", path: ENV.fetch("SENTRY_RUBY_PATH")

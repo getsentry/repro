@@ -1,0 +1,13 @@
+# frozen_string_literal: true
+
+source "https://rubygems.org"
+
+gem "rails", "8.1.4"
+
+# Set SENTRY_RUBY_PATH to a local sentry-ruby checkout to test a fix branch.
+if (path = ENV["SENTRY_RUBY_PATH"])
+  gem "sentry-ruby", path: File.join(path, "sentry-ruby")
+  gem "sentry-rails", path: File.join(path, "sentry-rails")
+else
+  gem "sentry-rails", "7.1.0"
+end

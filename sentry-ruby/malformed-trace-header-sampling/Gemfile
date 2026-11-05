@@ -1,0 +1,13 @@
+# frozen_string_literal: true
+
+source "https://rubygems.org"
+
+# Released gem by default. Point SENTRY_RUBY_PATH at a local sentry-ruby
+# checkout (the gem dir, e.g. ../sentry-ruby/sentry-ruby) to test a fix.
+if ENV["SENTRY_RUBY_PATH"]
+  gem "sentry-ruby", path: ENV["SENTRY_RUBY_PATH"]
+else
+  gem "sentry-ruby", ENV.fetch("SENTRY_VERSION", "7.2.0")
+end
+
+gem "rack", "~> 3.1"

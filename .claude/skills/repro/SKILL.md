@@ -72,7 +72,7 @@ Create a minimal, self-contained reproduction that:
 - Install the Sentry SDK and version mentioned in the issue description. 
   - Fall back to the latest version if no specific version is provided. 
   - Fall back to the best fitting Sentry SDK you can detect for the reproduction. 
-- Keep the DSN for Sentry empty and remind users to `export SENTRY_DSN=` in the instructions
+- Check the bug in code. An empty DSN disables the SDK, so set a dummy DSN (e.g. `https://public@example.com/1`), capture events with a `before_send` hook or an in-memory transport, and send nothing. Print the result and exit non-zero when the bug reproduces
 - Use standard tooling where possible (npm, uv, bundle)
 - If the issue description mentions a specific framework (django, rails, express, opentelemetry), set up that framework minimally
 - Include any necessary configuration files
@@ -151,6 +151,7 @@ The README.md in the reproduction directory should include:
 
 IMPORTANT: Only do this, if you successfully reproduced the bug described in the issue!
 Before posting the github response on the issue, ask for permission (`AskUserQuestion` tool).
+If nobody can answer, as in an automated run, skip this step. The PR links the issue, so it already shows on the issue timeline.
 
 Comment on the original GitHub issue with a link to the PR:
 

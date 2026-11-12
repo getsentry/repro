@@ -18,14 +18,18 @@ jobs:
   close-resolved:
     runs-on: ubuntu-latest
     steps:
-      - name: Close PRs whose upstream issue is resolved
+      - name: Close PRs whose upstream issue is closed or that went stale
         uses: actions/github-script@v7
         with:
           script: |
             const owner  = context.repo.owner;
             const repo   = context.repo.repo;
-            const label  = 'resolved-upstream';
             const dryRun = context.payload.inputs?.dry_run === 'true';
+            // A repro PR with no issue number in its title is closed after this many days without activity.
+            const staleDays = 30;
+            // Labels mark PRs this workflow closed, so a PR that someone re-opens is left alone.
+            const resolvedLabel = 'resolved-upstream';
+            const closedLabel   = 'auto-closed';
 
             // Fetch all open PRs (paginated)
             const prs = await github.paginate(github.rest.pulls.list, {
@@ -38,12 +42,38 @@ jobs:
             // Match titles like "Reproduction for sentry-ruby#2842"
             const titleRe = /^Reproduction for (sentry-[\w-]+#\d+)/;
 
-            for (const pr of prs) {
-              const match = pr.title.match(titleRe);
-              if (!match) continue;
+            async function close(pr, body, label) {
+              if (dryRun) {
+                core.info(`  [dry run] would close PR #${pr.number}`);
+                return;
+              }
+              try {
+                // Close first: if this fails, the PR stays open and the next run retries
+                // cleanly with no duplicate comments
+                await github.rest.pulls.update({ owner, repo, pull_number: pr.number, state: 'closed' });
+                await github.rest.issues.createComment({ owner, repo, issue_number: pr.number, body });
+                await github.rest.issues.addLabels({ owner, repo, issue_number: pr.number, labels: [label] });
+              } catch (err) {
+                core.warning(`PR #${pr.number}: failed to close — ${err.message}`);
+              }
+            }
 
-              // Skip if already labelled (already processed on a previous run)
-              if (pr.labels.some(l => l.name === label)) continue;
+            for (const pr of prs) {
+              if (!pr.title.startsWith('Reproduction for ')) continue;
+              if (pr.labels.some(l => l.name === resolvedLabel || l.name === closedLabel)) continue;
+              const match = pr.title.match(titleRe);
+
+              if (!match) {
+                const idleDays = (Date.now() - Date.parse(pr.updated_at)) / 86400000;
+                if (idleDays < staleDays) continue;
+                core.info(`PR #${pr.number}: no linked issue and no activity for ${Math.floor(idleDays)} days`);
+                await close(pr, [
+                  `This reproduction has no linked issue and no activity for ${staleDays} days.`,
+                  '',
+                  'Closing it. Re-open it if the bug is still relevant!',
+                ].join('\n'), closedLabel);
+                continue;
+              }
 
               const [upstreamRepo, issueNumber] = match[1].split('#');
 
@@ -61,43 +91,17 @@ jobs:
                 continue;
               }
 
-              if (issue.data.state !== 'closed' || issue.data.state_reason !== 'completed') continue;
+              if (issue.data.state !== 'closed') continue;
 
-              core.info(`PR #${pr.number}: upstream getsentry/${upstreamRepo}#${issueNumber} is resolved`);
+              const link = `[getsentry/${upstreamRepo}#${issueNumber}](https://github.com/getsentry/${upstreamRepo}/issues/${issueNumber})`;
+              const resolved = issue.data.state_reason === 'completed';
+              core.info(`PR #${pr.number}: upstream getsentry/${upstreamRepo}#${issueNumber} is closed (${issue.data.state_reason})`);
 
-              if (dryRun) {
-                core.info(`  [dry run] would label and close PR #${pr.number}`);
-                continue;
-              }
-
-              try {
-                // Close first — if this fails, the PR stays open and unlabelled
-                // so the next run retries cleanly with no duplicate comments
-                await github.rest.pulls.update({
-                  owner,
-                  repo,
-                  pull_number: pr.number,
-                  state: 'closed',
-                });
-
-                await github.rest.issues.createComment({
-                  owner,
-                  repo,
-                  issue_number: pr.number,
-                  body: [
-                    `Upstream issue [getsentry/${upstreamRepo}#${issueNumber}](https://github.com/getsentry/${upstreamRepo}/issues/${issueNumber}) has been closed.`,
-                    '',
-                    'Closing this reproduction PR. Re-open if the issue resurfaces!',
-                  ].join('\n'),
-                });
-
-                await github.rest.issues.addLabels({
-                  owner,
-                  repo,
-                  issue_number: pr.number,
-                  labels: [label],
-                });
-              } catch (err) {
-                core.warning(`PR #${pr.number}: failed to close — ${err.message}`);
-              }
+              await close(pr, [
+                resolved
+                  ? `Upstream issue ${link} has been closed.`
+                  : `Upstream issue ${link} was closed as ${(issue.data.state_reason ?? 'not planned').replace('_', ' ')}.`,
+                '',
+                'Closing this reproduction PR. Re-open if the issue resurfaces!',
+              ].join('\n'), resolved ? resolvedLabel : closedLabel);
             }

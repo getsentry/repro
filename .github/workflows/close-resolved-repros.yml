@@ -39,8 +39,8 @@ jobs:
               per_page: 100,
             });
 
-            // Match titles like "Reproduction for sentry-ruby#2842"
-            const titleRe = /^Reproduction for (sentry-[\w-]+#\d+)/;
+            // Match titles like "Reproduction for sentry-ruby#2842" or "Reproduction for relay#45"
+            const titleRe = /^Reproduction for ([\w.-]+)#(\d+)\b/;
 
             async function close(pr, body, label) {
               if (dryRun) {
@@ -48,11 +48,11 @@ jobs:
                 return;
               }
               try {
-                // Close first: if this fails, the PR stays open and the next run retries
-                // cleanly with no duplicate comments
+                // Label first: a PR closed without the label would be closed again,
+                // with a second comment, after someone re-opens it
+                await github.rest.issues.addLabels({ owner, repo, issue_number: pr.number, labels: [label] });
                 await github.rest.pulls.update({ owner, repo, pull_number: pr.number, state: 'closed' });
                 await github.rest.issues.createComment({ owner, repo, issue_number: pr.number, body });
-                await github.rest.issues.addLabels({ owner, repo, issue_number: pr.number, labels: [label] });
               } catch (err) {
                 core.warning(`PR #${pr.number}: failed to close — ${err.message}`);
               }
@@ -75,7 +75,7 @@ jobs:
                 continue;
               }
 
-              const [upstreamRepo, issueNumber] = match[1].split('#');
+              const [, upstreamRepo, issueNumber] = match;
 
               let issue;
               try {
@@ -92,15 +92,19 @@ jobs:
               }
 
               if (issue.data.state !== 'closed') continue;
+              const reason = issue.data.state_reason;
+              // A duplicate's bug lives on in the issue it duplicates, which may still be open
+              if (reason === 'duplicate') continue;
 
               const link = `[getsentry/${upstreamRepo}#${issueNumber}](https://github.com/getsentry/${upstreamRepo}/issues/${issueNumber})`;
-              const resolved = issue.data.state_reason === 'completed';
-              core.info(`PR #${pr.number}: upstream getsentry/${upstreamRepo}#${issueNumber} is closed (${issue.data.state_reason})`);
+              // Older issues and some API paths close with no reason; treat that as completed
+              const resolved = reason === 'completed' || reason == null;
+              core.info(`PR #${pr.number}: upstream getsentry/${upstreamRepo}#${issueNumber} is closed (${reason})`);
 
               await close(pr, [
                 resolved
                   ? `Upstream issue ${link} has been closed.`
-                  : `Upstream issue ${link} was closed as ${(issue.data.state_reason ?? 'not planned').replace('_', ' ')}.`,
+                  : `Upstream issue ${link} was closed as ${reason.replace('_', ' ')}.`,
                 '',
                 'Closing this reproduction PR. Re-open if the issue resurfaces!',
               ].join('\n'), resolved ? resolvedLabel : closedLabel);

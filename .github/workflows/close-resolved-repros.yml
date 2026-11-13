@@ -83,11 +83,12 @@ jobs:
                   const { data } = await github.rest.issues.get({ owner: 'getsentry', repo: upstreamRepo, issue_number: Number(number) });
                   upstream = { data, link: `[getsentry/${upstreamRepo}#${number}](${data.html_url})` };
                 } catch (err) {
-                  if (err.status !== 404) {
+                  // 404 also covers private repos and issues moved to discussions, 410 a deleted issue.
+                  if (![404, 410].includes(err.status)) {
                     core.warning(`PR #${pr.number}: could not fetch getsentry/${upstreamRepo}#${number} — ${err.message}`);
                     continue;
                   }
-                  core.info(`PR #${pr.number}: getsentry/${upstreamRepo}#${number} does not exist`);
+                  core.info(`PR #${pr.number}: getsentry/${upstreamRepo}#${number} could not be found`);
                 }
               }
 
@@ -112,14 +113,14 @@ jobs:
                 continue;
               }
 
-              // No issue number, a number that does not exist, or a duplicate: the bug may still be open
+              // No issue number, an issue that could not be found, or a duplicate: the bug may still be open
               // somewhere else, so close only after it went stale, and never after a person re-opened it.
               const idleDays = (Date.now() - Date.parse(pr.updated_at)) / 86400000;
               if (idleDays < staleDays) continue;
               if (await reopenedAt(pr)) continue;
               const why = upstream
                 ? `Upstream issue ${upstream.link} was closed as a duplicate`
-                : match ? `Its title points to getsentry/${match[1]}#${match[2]}, which does not exist` : 'It has no linked issue';
+                : match ? `Its title points to getsentry/${match[1]}#${match[2]}, which could not be found` : 'It has no linked issue';
               core.info(`PR #${pr.number}: ${why}, no activity for ${Math.floor(idleDays)} days`);
               await close(pr, [
                 `${why}, and this reproduction has had no activity for ${staleDays} days.`,

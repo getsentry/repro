@@ -25,7 +25,7 @@ jobs:
             const owner  = context.repo.owner;
             const repo   = context.repo.repo;
             const dryRun = context.payload.inputs?.dry_run === 'true';
-            // A repro PR with no usable issue is closed after this many days without activity.
+            // A repro PR whose issue could not be found or is a duplicate closes after this many days without activity.
             const staleDays = 30;
             // Labels only record why this workflow closed a PR.
             const resolvedLabel = 'resolved-upstream';
@@ -75,21 +75,21 @@ jobs:
             for (const pr of prs) {
               if (!pr.title.startsWith('Reproduction for ')) continue;
               const match = pr.title.match(titleRe);
+              // Description-based repros have no issue to follow and are often merged, so they stay open.
+              if (!match) continue;
 
               let upstream = null;
-              if (match) {
-                const [, upstreamRepo, number] = match;
-                try {
-                  const { data } = await github.rest.issues.get({ owner: 'getsentry', repo: upstreamRepo, issue_number: Number(number) });
-                  upstream = { data, link: `[getsentry/${upstreamRepo}#${number}](${data.html_url})` };
-                } catch (err) {
-                  // 404 also covers private repos and issues moved to discussions, 410 a deleted issue.
-                  if (![404, 410].includes(err.status)) {
-                    core.warning(`PR #${pr.number}: could not fetch getsentry/${upstreamRepo}#${number} — ${err.message}`);
-                    continue;
-                  }
-                  core.info(`PR #${pr.number}: getsentry/${upstreamRepo}#${number} could not be found`);
+              const [, upstreamRepo, number] = match;
+              try {
+                const { data } = await github.rest.issues.get({ owner: 'getsentry', repo: upstreamRepo, issue_number: Number(number) });
+                upstream = { data, link: `[getsentry/${upstreamRepo}#${number}](${data.html_url})` };
+              } catch (err) {
+                // 404 also covers private repos and issues moved to discussions, 410 a deleted issue.
+                if (![404, 410].includes(err.status)) {
+                  core.warning(`PR #${pr.number}: could not fetch getsentry/${upstreamRepo}#${number} — ${err.message}`);
+                  continue;
                 }
+                core.info(`PR #${pr.number}: getsentry/${upstreamRepo}#${number} could not be found`);
               }
 
               if (upstream?.data.state === 'open') continue;
@@ -113,14 +113,14 @@ jobs:
                 continue;
               }
 
-              // No issue number, an issue that could not be found, or a duplicate: the bug may still be open
+              // An issue that could not be found or a duplicate: the bug may still be open
               // somewhere else, so close only after it went stale, and never after a person re-opened it.
               const idleDays = (Date.now() - Date.parse(pr.updated_at)) / 86400000;
               if (idleDays < staleDays) continue;
               if (await reopenedAt(pr)) continue;
               const why = upstream
                 ? `Upstream issue ${upstream.link} was closed as a duplicate`
-                : match ? `Its title points to getsentry/${match[1]}#${match[2]}, which could not be found` : 'It has no linked issue';
+                : `Its title points to getsentry/${upstreamRepo}#${number}, which could not be found`;
               core.info(`PR #${pr.number}: ${why}, no activity for ${Math.floor(idleDays)} days`);
               await close(pr, [
                 `${why}, and this reproduction has had no activity for ${staleDays} days.`,

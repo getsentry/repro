@@ -1,0 +1,6 @@
+source "https://rubygems.org"
+
+gem "sentry-ruby", ENV.fetch("SENTRY_RUBY_VERSION", "7.0.0")
+# redis-rb 4.x (Redis::Client#logging patch) and 5.x (RedisClient middleware)
+# take different code paths in Sentry::Redis, so the version is switchable.
+gem "redis", "~> #{ENV.fetch("REDIS_RB_VERSION", "5.4")}"

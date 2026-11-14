@@ -25,11 +25,14 @@ jobs:
             const owner  = context.repo.owner;
             const repo   = context.repo.repo;
             const dryRun = context.payload.inputs?.dry_run === 'true';
-            // A repro PR whose issue could not be found or is a duplicate closes after this many days without activity.
+            // A repro PR whose issue could not be found or is a duplicate, or a Junior repro PR whose issue
+            // is still open, closes after this many days without activity.
             const staleDays = 30;
             // Labels only record why this workflow closed a PR.
             const resolvedLabel = 'resolved-upstream';
             const closedLabel   = 'auto-closed';
+            // Junior's sdk-repro runs add this label. Their repros can stay open forever when the bug did not reproduce.
+            const juniorLabel   = 'junior-automation:repro';
 
             const prs = await github.paginate(github.rest.pulls.list, {
               owner,
@@ -92,12 +95,13 @@ jobs:
                 core.info(`PR #${pr.number}: getsentry/${upstreamRepo}#${number} could not be found`);
               }
 
-              if (upstream?.data.state === 'open') continue;
+              const upstreamOpen = upstream?.data.state === 'open';
+              if (upstreamOpen && !pr.labels.some(l => l.name === juniorLabel)) continue;
 
               // The title can also point to a PR. Issues closed before GitHub had close reasons have none.
               const pull = upstream?.data.pull_request;
               const reason = upstream?.data.state_reason;
-              if (upstream && reason !== 'duplicate') {
+              if (upstream && !upstreamOpen && reason !== 'duplicate') {
                 const reopened = await reopenedAt(pr);
                 if (reopened && Date.parse(upstream.data.closed_at) < reopened) continue;
                 const resolved = pull ? Boolean(pull.merged_at) : reason === 'completed' || reason == null;
@@ -113,14 +117,16 @@ jobs:
                 continue;
               }
 
-              // An issue that could not be found or a duplicate: the bug may still be open
-              // somewhere else, so close only after it went stale, and never after a person re-opened it.
+              // An issue that could not be found, a duplicate, or a Junior repro whose issue is still open:
+              // the bug may still matter, so close only after it went stale, and never after a person re-opened it.
               const idleDays = (Date.now() - Date.parse(pr.updated_at)) / 86400000;
               if (idleDays < staleDays) continue;
               if (await reopenedAt(pr)) continue;
-              const why = upstream
-                ? `Upstream issue ${upstream.link} was closed as a duplicate`
-                : `Its title points to getsentry/${upstreamRepo}#${number}, which could not be found`;
+              const why = !upstream
+                ? `Its title points to getsentry/${upstreamRepo}#${number}, which could not be found`
+                : upstreamOpen
+                  ? `Upstream issue ${upstream.link} is still open`
+                  : `Upstream issue ${upstream.link} was closed as a duplicate`;
               core.info(`PR #${pr.number}: ${why}, no activity for ${Math.floor(idleDays)} days`);
               await close(pr, [
                 `${why}, and this reproduction has had no activity for ${staleDays} days.`,

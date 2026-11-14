@@ -1,0 +1,2 @@
+sentry-sdk==2.74.0
+google-genai==3.2.0

@@ -1,0 +1,12 @@
+[project]
+name = "repro-sdk-repro-test-python-26"
+version = "0.0.0"
+requires-python = ">=3.10"
+dependencies = [
+    "sentry-sdk==2.64.0",
+    "starlette>=1,<2",
+    "httpx",
+]
+
+[tool.uv]
+package = false

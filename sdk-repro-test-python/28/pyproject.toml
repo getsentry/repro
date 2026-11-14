@@ -1,0 +1,8 @@
+[project]
+name = "continued-trace-sample-rate-repro"
+version = "0.1.0"
+description = "Reproduction for sdk-repro-test-python#28"
+requires-python = ">=3.12"
+dependencies = [
+    "sentry-sdk==2.73.0",
+]
